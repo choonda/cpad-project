@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>T-Bites Mobile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Load W3.CCS and Bootstrap via local host -->
+  <link rel="stylesheet" href="../css/w3.css">
+  <link rel="stylesheet" href="../css/w3pro.css">
+  <link rel="stylesheet" href="../css/w3-theme-teal.css">
+  <link rel="stylesheet" href="../css/bootstrap.min.css">
+</head>
+<body style="max-width:480px" id="app">
+  <!-- Side bar navigation -->
+  <nav class="w3-sidebar w3-bar-block w3-card" v-show="viewSideBar">
+    <div class="w3-container w3-theme-d2">
+      <span @click="viewSideBar=false" class="w3-button w3-display-topright w3-large">X</span>
+      <br><br>
+    </div>
+    <a class="w3-bar-item w3-button" @click="menuPage()">Menu</a>
+    <a class="w3-bar-item w3-button" @click="orderPage()">Order</a>
+    <a class="w3-bar-item w3-button" @click="checkOrderPage()" v-show="user.id">Check Order</a>
+    <a class="w3-bar-item w3-button" @click="loginPage()" v-show="!user.id">Login</a>
+    <a class="w3-bar-item w3-button" @click="logout()" v-show="user.id">Logout ({{user.email}})</a>
+  </nav>
+  
+  <!-- Header section -->
+  <header class="w3-bar w3-card w3-theme">
+    <button class="w3-bar-item w3-button w3-xxxlarge w3-hover-theme" @click="viewSideBar=true">&#9776;</button>
+    <h1 class="w3-bar-item">Tasty Bites</h1>
+  </header>
+
+  <!-- Main content section -->
+  <div>
+    <!-- Render the imported component -->
+    <menu-page v-if="viewMenuPage" :menulist="menus" :orderlist="orders" @add-item="addOrder" @reduce-item="reduceOrder"></menu-page>
+    <order-page  v-if="viewOrderPage" :orderlist="orders" :subtotal="subtotal" :user="user" @reset-order="resetOrder"></order-page>
+    <check-order-page v-if="viewCheckOrderPage"></check-order-page>
+    <login-page v-if="viewLoginPage" @auth-user="authUser"></login-page>
+  </div>
+  
+  <!-- Footer section -->
+  <footer class="w3-container w3-theme w3-margin-top w3-center">
+    Contact: tastybites@email.com
+    <br>
+    &copy; 2026 Tasty Bites
+  </footer>
+</body>
+</html>
+<!-- Load Bootstrap JavaScript library via localhost -->
+<script src="../js/bootstrap.bundle.min.js"></script>
+
+<!-- Load Vue 3 via CDN -->
+<script  src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+<!-- Note the type="module" attribute -->
+<script type="module">
+  // Import your local JS component file
+  import MenuPage from './menu-page.js';
+  import OrderPage from './order-page.js';
+  import CheckOrderPage from './check-order-page.js';
+  import LoginPage from './login-page.js';
+  
+  const vueApp = Vue.createApp({
+    components: {
+      // Register the imported object locally
+      MenuPage, CheckOrderPage, OrderPage, LoginPage
+    },
+    
+    data() { 
+      return { viewSideBar: false, 
+               viewMenuPage: true, viewOrderPage: false, viewCheckOrderPage: false, viewLoginPage: false,
+               menus: [ 
+                  { id: 1, name:'Fresh Orange', price:5.00, type:'Drink'},
+                  { id: 2, name:'Hot Arabica Coffee', price:4.00, type:'Drink'},
+                  { id: 3, name:'Beef Burger', price:8.50, type:'Food'}, 
+                  { id: 4, name:'Chicken Pizza', price:15.00, type:'Food'}, 
+              ],
+              user: { name:'', email:'', phone:'', delivery:'', comments:'', id:null, role:null },
+              orders: { }, subtotal: 0,
+      }
+    },
+    methods: {
+      menuPage() {
+        this.resetViews();
+        this.viewMenuPage = true;
+      }, // end of menuPage
+      
+      orderPage() {
+        this.resetViews();
+        this.viewOrderPage = true;
+      }, // end of orderPage
+      
+      checkOrderPage() {
+        this.resetViews();
+        this.viewCheckOrderPage = true;
+      }, // end of orderPage
+      
+      loginPage() {
+        this.resetViews();
+        this.viewLoginPage = true;
+      }, // end of loinPage
+      
+      resetViews() {
+        this.viewSideBar = false;
+        this.viewMenuPage = false;
+        this.viewOrderPage = false;
+        this.viewCheckOrderPage = false;
+        this.viewLoginPage = false;
+      }, // end of resetView
+      
+      authUser(user) {
+        this.user.name = user.name;
+        this.user.email = user.email;
+        this.user.phone = user.phone;
+        this.user.id = user.id;
+        this.user.role = user.role;
+        
+        this.resetViews();
+        this.viewMenuPage = true;
+      }, // end of authUser
+      
+      logout() {
+        this.orders = {};
+        this.subtotal = 0;
+        this.user = { name:'', email:'', phone:'', delivery:'', comments:'', id:null, role:null };
+        
+        this.resetViews();
+        this.viewLoginPage = true;
+      }, // end of logout
+      
+      addOrder(item) {
+        if (!this.orders[item.id]) {
+          //alert("create and add order");
+          this.orders[item.id] = {name:item.name, price:item.price, qty:1};
+          this.subtotal += this.orders[item.id]['price'];
+          
+        } else {
+          //alert("add order");
+          this.orders[item.id]['qty']++;
+          this.subtotal += this.orders[item.id]['price'];
+        }
+      }, // end of addOrder
+      
+      reduceOrder(item) {
+        var id = item.id;
+        
+        if (this.orders[id]) { // check if order exist
+          if (this.orders[id]['qty'] > 0) {
+            this.orders[id]['qty']--;
+            this.subtotal -= this.orders[id]['price'];
+          }
+          
+          if (this.orders[id]['qty'] == 0) {
+            delete this.orders[id];
+          }
+        }
+      }, // end of reduceOrder
+      
+      resetOrder() {
+        this.orders = {};
+        this.subtotal = 0;
+        
+        this.resetViews();
+        this.viewMenuPage = true;
+      }, // end of resetOrder
+    },
+  });
+
+  vueApp.mount('#app');
+</script>
