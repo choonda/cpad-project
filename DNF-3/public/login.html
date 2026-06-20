@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arked Meranti Ordering System - Login</title>
+
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: sans-serif;
+        }
+
+        .login-container {
+            max-width: 450px;
+            margin-top: 10%;
+        }
+
+        .card {
+            border: none;
+            border-radius: 10px;
+        }
+
+        .brand-header {
+            color: #800020;
+            /* Deep Burgundy color styling */
+            font-weight: 700;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="loginApp" class="container d-flex justify-content-center">
+        <div class="login-container w-100 p-3">
+
+            <div class="text-center mb-4">
+                <h2 class="brand-header">Arked Meranti Food Court</h2>
+                <p class="text-muted">Online Food & Drink Ordering System</p>
+            </div>
+
+            <div class="card shadow-sm p-4">
+                <h4 class="card-title mb-4 font-weight-bold text-secondary">Account Authentication</h4>
+
+                <div v-if="errorMessage" class="alert alert-danger font-weight-bold" role="alert">
+                    {{ errorMessage }}
+                </div>
+
+                <form v-on:submit.prevent="handleLoginSubmit">
+
+                    <div class="form-group mb-3">
+                        <label for="usernameInput" class="form-label font-weight-bold text-muted">Username</label>
+                        <input type="text" id="usernameInput" class="form-control form-control-lg"
+                            placeholder="Enter your student or vendor username" v-model="loginModel.username" required>
+                    </div>
+
+                    <div class="form-group mb-4">
+                        <label for="passwordInput" class="form-label font-weight-bold text-muted">Password</label>
+                        <input type="password" id="passwordInput" class="form-control form-control-lg"
+                            placeholder="Enter your security password" v-model="loginModel.password" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100 font-weight-bold"
+                        v-bind:disabled="isProcessing">
+                        <span v-if="isProcessing" class="spinner-border spinner-border-sm mr-2 me-2" role="status"
+                            aria-hidden="true"></span>
+                        {{ isProcessing ? 'Authenticating Credentials...' : 'Sign In' }}
+                    </button>
+                </form>
+            </div>
+
+            <div class="text-center mt-4 text-muted small">
+                &copy; 2026 Section 03 - Group DNF. Universiti Teknologi Malaysia. All Rights Reserved.
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <script>
+        // Instantiate a new reactive app control container bound to the #loginApp element
+        const appInstance = Vue.createApp({
+            data() {
+                return {
+                    // Reactive data properties mapping precisely to the system state models
+                    loginModel: {
+                        username: '',
+                        password: ''
+                    },
+                    errorMessage: null,
+                    isProcessing: false
+                };
+            },
+            methods: {
+                // Asynchronous handler function to capture form intercept events
+                async handleLoginSubmit() {
+                    this.errorMessage = null;
+                    this.isProcessing = true;
+
+                    const targetEndpoint = '/cpad-project/DNF-3/api/login';
+
+                    try {
+                        // Execute non-blocking network asynchronous AJAX POST fetch operation
+                        const response = await fetch(targetEndpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify(this.loginModel)
+                        });
+
+                        const responseData = await response.json();
+
+                        if (response.ok && responseData.success) {
+                            if (responseData.role === 'customer') {
+                                window.location.href = 'customer_dashboard.html';
+                            } else if (responseData.role === 'vendor') {
+                                window.location.href = 'vendor_dashboard.html';
+                            } else if (responseData.role === 'admin') {
+                                window.location.href = 'admin_dashboard.html';
+                            } else {
+                                this.errorMessage = 'System Exception: Unauthorized user domain privileges allocation.';
+                            }
+                        }
+                    } catch (networkError) {
+                        this.errorMessage = 'Network Routing Exception: Unable to establish contact with the Slim API application environment.';
+                        console.error('AJAX Failure Details:', networkError);
+                    } finally {
+                        this.isProcessing = false;
+                    }
+                }
+            }
+        });
+
+        // Mount runtime execution thread to anchor structural layout node
+        appInstance.mount('#loginApp');
+    </script>
+
+</body>
+
+</html>

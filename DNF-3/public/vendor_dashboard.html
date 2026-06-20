@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <!-- Viewport definition for multi-screen responsive design compliance -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arked Meranti - Vendor Back-Office Workspace</title>
+
+    <!-- Link local core Bootstrap styling sheet provided in the project skeleton -->
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: sans-serif;
+        }
+
+        .navbar-brand-custom {
+            color: #800020 !important;
+            /* Deep Burgundy theme styling */
+            font-weight: 700;
+        }
+
+        .dashboard-tab {
+            cursor: pointer;
+        }
+
+        .ticket-card {
+            border: none;
+            border-left: 5px solid #800020;
+            border-radius: 6px;
+        }
+
+        .switch-toggle {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .switch-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider-toggle {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider-toggle:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider-toggle {
+            background-color: #1b5e20;
+        }
+
+        input:checked+.slider-toggle:before {
+            transform: translateX(26px);
+        }
+
+        .bg-teal {
+            background-color: #20c997 !important;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="vendorApp">
+        <!-- Global Header Navigation Bar Bar -->
+        <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
+            <div class="container">
+                <a class="navbar-brand navbar-brand-custom" href="#">Arked Meranti Kiosk Workspace</a>
+                <div class="d-flex align-items-center">
+                    <span class="navbar-text mr-3 me-3 font-weight-bold text-secondary" v-if="vendorUsername">
+                        Stall Operator: {{ vendorUsername }}
+                    </span>
+                    <button v-on:click="handleLogout" class="btn btn-outline-danger btn-sm font-weight-bold">Sign
+                        Out</button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container mb-5">
+            <!-- Main Panel Functional Navigation Control Tabs -->
+            <ul class="nav nav-pills mb-4 shadow-sm bg-white p-2 rounded">
+                <li class="nav-item">
+                    <button
+                        v-bind:class="['nav-link', activeViewTab === 'orders' ? 'active btn-dark' : 'text-secondary font-weight-bold']"
+                        v-on:click="activeViewTab = 'orders'">
+                        Live Order Tickets Queue ({{ totalPendingOrdersCount }})
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button
+                        v-bind:class="['nav-link', activeViewTab === 'inventory' ? 'active btn-dark' : 'text-secondary font-weight-bold']"
+                        v-on:click="activeViewTab = 'inventory'">
+                        Stock Availability Management
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Operation Status Messages Banner Feedback -->
+            <div v-if="actionFeedbackMessage" class="alert alert-success font-weight-bold shadow-sm" role="alert">
+                {{ actionFeedbackMessage }}
+            </div>
+
+            <!-- SEGMENT FRAME 1: Live Customer Orders Ticket Queue Management -->
+            <div v-if="activeViewTab === 'orders'">
+                <div class="row">
+                    <div class="col-12">
+                        <h4 class="font-weight-bold text-secondary mb-3">Incoming Kitchen Orders</h4>
+
+                        <div v-if="ordersQueue.length > 0">
+                            <div class="card ticket-card shadow-sm p-4 mb-3 bg-white" v-for="order in ordersQueue"
+                                v-bind:key="order.order_id">
+                                <div class="row align-items-center">
+                                    <div class="col-md-3">
+                                        <span class="badge bg-light text-dark border font-weight-bold mb-1">Ticket #{{
+                                            order.order_id }}</span>
+                                        <h5 class="font-weight-bold mb-0 text-dark">User: {{ order.customer_name }}</h5>
+                                        <small class="text-muted font-weight-bold">{{ order.order_date }}</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <small class="text-muted font-weight-bold d-block">Bill Aggregate:</small>
+                                        <span class="text-success font-weight-bold h5">RM {{
+                                            parseFloat(order.total_price).toFixed(2) }}</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <small class="text-muted font-weight-bold d-block mb-1">Fulfillment
+                                            State:</small>
+                                        <span
+                                            v-bind:class="['badge', order.status === 'Received' ? 'bg-primary' : 'bg-warning text-dark', 'font-weight-bold', 'px-3', 'py-2']">
+                                            {{ order.status }}
+                                        </span>
+                                    </div>
+                                    <div class="col-md-3 text-md-right mt-3 mt-md-0">
+                                        <!-- Contextual Lifecycle Actions Trigger Progress Controls -->
+                                        <button v-if="order.status === 'Received'"
+                                            v-on:click="updateOrderStatusState(order.order_id, 'Preparing')"
+                                            class="btn btn-warning font-weight-bold btn-sm shadow-sm">
+                                            Accept & Start Cooking
+                                        </button>
+                                        <button v-else-if="order.status === 'Preparing'"
+                                            v-on:click="updateOrderStatusState(order.order_id, 'Ready')"
+                                            class="btn btn-success font-weight-bold btn-sm shadow-sm">
+                                            Serve - Order Ready
+                                        </button>
+                                        <span v-else class="text-muted font-weight-bold text-sm">Dispatched
+                                            Completed</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center py-5 text-muted bg-white rounded shadow-sm" v-else>
+                            <p class="mb-0 h5 font-weight-bold text-secondary">All order queues are clear!</p>
+                            <small>Waiting for campus customers to place new digital orders...</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEGMENT FRAME 2: Menu Stock Availability Toggle (Quick Inventory Management) -->
+            <div v-if="activeViewTab === 'inventory'">
+                <div class="card shadow-sm p-4 bg-white">
+                    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                        <h4 class="font-weight-bold text-secondary mb-0">Menu Inventory Availability Control Panel</h4>
+                        <button class="btn btn-primary font-weight-bold btn-sm shadow-sm" v-on:click="openAddModal">Add New Menu Item</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr class="text-muted text-uppercase font-weight-bold small">
+                                    <th>Item ID</th>
+                                    <th>Dish/Beverage Name</th>
+                                    <th>Category</th>
+                                    <th>Base Cost</th>
+                                    <th class="text-center">Availability Toggle</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="menuItem in menusCatalog" v-bind:key="menuItem.menu_id">
+                                    <td class="font-weight-bold text-secondary">#{{ menuItem.menu_id }}</td>
+                                    <td class="font-weight-bold text-dark">{{ menuItem.item_name }}</td>
+                                    <td>
+                                        <span
+                                            v-bind:class="['badge', menuItem.category === 'food' ? 'bg-teal text-white' : 'bg-info text-white']">
+                                            {{ menuItem.category }}
+                                        </span>
+                                    </td>
+                                    <td class="font-weight-bold text-success">RM {{
+                                        parseFloat(menuItem.price).toFixed(2) }}</td>
+                                    <td class="text-center">
+                                        <!-- Interactive Custom Checkbox Configuration for Real-time Stock Updates -->
+                                        <label class="switch-toggle mb-0">
+                                            <input type="checkbox" v-bind:checked="menuItem.is_available == 1"
+                                                v-on:change="toggleItemStockAvailability(menuItem.menu_id, $event.target.checked)">
+                                            <span class="slider-toggle"></span>
+                                        </label>
+                                        <span class="d-block small font-weight-bold mt-1"
+                                            v-bind:class="menuItem.is_available == 1 ? 'text-success' : 'text-danger'">
+                                            {{ menuItem.is_available == 1 ? 'In Stock' : 'Out of Stock' }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-outline-primary font-weight-bold" v-on:click="openEditModal(menuItem)">Edit</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Modal Overlay for Add/Edit Menu Item -->
+            <div v-if="showMenuModal" class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content shadow-lg border-0">
+                        <div class="modal-header bg-dark text-white">
+                            <h5 class="modal-title font-weight-bold">{{ isEditing ? 'Edit Menu Item' : 'Add New Menu Item' }}</h5>
+                            <button type="button" class="btn-close btn-close-white" v-on:click="closeMenuModal" aria-label="Close"></button>
+                        </div>
+                        <form v-on:submit.prevent="saveMenuItem">
+                            <div class="modal-body p-4">
+                                <div v-if="modalErrorMessage" class="alert alert-danger font-weight-bold">
+                                    {{ modalErrorMessage }}
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label font-weight-bold text-muted">Item Name</label>
+                                    <input type="text" class="form-control" v-model="menuForm.item_name" required placeholder="e.g. Nasi Lemak Ayam">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label font-weight-bold text-muted">Price (RM)</label>
+                                    <input type="number" step="0.01" min="0" class="form-control" v-model="menuForm.price" required placeholder="e.g. 6.50">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label font-weight-bold text-muted">Category</label>
+                                    <select class="form-select" v-model="menuForm.category" required>
+                                        <option value="food">Food</option>
+                                        <option value="beverage">Beverage</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary font-weight-bold" v-on:click="closeMenuModal">Cancel</button>
+                                <button type="submit" class="btn btn-primary font-weight-bold" v-bind:disabled="isSavingMenuItem">
+                                    <span v-if="isSavingMenuItem" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    Save Changes
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link standard global runtime package delivery link for Vue 3 Options API framework -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <script>
+        const vendorAppInstance = Vue.createApp({
+            data() {
+                return {
+                    vendorUsername: '',
+                    vendorUserId: null,
+                    activeViewTab: 'orders', // Track current layout state: 'orders' or 'inventory'
+                    allOrdersCollection: [],
+                    menusCatalog: [],
+                    actionFeedbackMessage: null,
+                    showMenuModal: false,
+                    isEditing: false,
+                    isSavingMenuItem: false,
+                    modalErrorMessage: null,
+                    menuForm: {
+                        menu_id: null,
+                        item_name: '',
+                        price: '',
+                        category: 'food'
+                    }
+                };
+            },
+            computed: {
+                // Filter global order streams down strictly to active operational kitchen tickets (Received and Preparing)
+                ordersQueue() {
+                    return this.allOrdersCollection.filter(o => o.status === 'Received' || o.status === 'Preparing');
+                },
+                totalPendingOrdersCount() {
+                    return this.ordersQueue.length;
+                }
+            },
+            mounted() {
+                // Read identity attributes from verified credentials cookies
+                this.vendorUsername = this.getCookieValueByName('username') || 'Vendor Operator';
+                this.vendorUserId = this.getCookieValueByName('user_id');
+
+                // Initialize background resource fetch operations
+                this.fetchVendorLiveOrders();
+                this.fetchVendorMenusCatalog();
+            },
+            methods: {
+                getCookieValueByName(cookieName) {
+                    const match = document.cookie.match(new RegExp('(^| )' + cookieName + '=([^;]+)'));
+                    return match ? decodeURIComponent(match[2]) : null;
+                },
+                // Asynchronous retrieval handler parsing orders from database ecosystem
+                async fetchVendorLiveOrders() {
+                    try {
+                        const response = await fetch('/cpad-project/DNF-3/api/orders');
+                        const jsonOutcome = await response.json();
+                        if (jsonOutcome.success) {
+                            this.allOrdersCollection = jsonOutcome.data;
+                        }
+                    } catch (err) {
+                        console.error('Failed to trace server active order channels:', err);
+                    }
+                },
+                // Asynchronous retrieval handler pulling entire catalog listings
+                async fetchVendorMenusCatalog() {
+                    try {
+                        const response = await fetch('/cpad-project/DNF-3/api/menus');
+                        const jsonOutcome = await response.json();
+                        if (jsonOutcome.success) {
+                            this.menusCatalog = jsonOutcome.data;
+                        }
+                    } catch (err) {
+                        console.error('Failed to sync master menu catalog items:', err);
+                    }
+                },
+                // Operation Mutation Handler modifying order status parameters via PUT method
+                async updateOrderStatusState(orderId, targetNextStatus) {
+                    try {
+                        const response = await fetch(`/cpad-project/DNF-3/api/orders/${orderId}/status`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: targetNextStatus })
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                            this.triggerFeedbackAlert(`Order Ticket #${orderId} status advanced to: ${targetNextStatus}`);
+                            this.fetchVendorLiveOrders(); // Refresh order queues
+                        }
+                    } catch (err) {
+                        console.error('Error changing ticket workflow parameter state:', err);
+                    }
+                },
+                // Operation Mutation Handler processing availability state change mutations
+                async toggleItemStockAvailability(menuId, isCheckedCheckedState) {
+                    const mappedBinaryState = isCheckedCheckedState ? 1 : 0;
+                    try {
+                        const response = await fetch(`/cpad-project/DNF-3/api/menus/${menuId}/toggle`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ is_available: mappedBinaryState })
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                            this.triggerFeedbackAlert(`Menu Item #${menuId} stock status modified.`);
+                            this.fetchVendorMenusCatalog(); // Sync local arrays visibility
+                        }
+                    } catch (err) {
+                        console.error('Failed to change stock parameters toggle state:', err);
+                    }
+                },
+                openAddModal() {
+                    this.isEditing = false;
+                    this.modalErrorMessage = null;
+                    this.menuForm = {
+                        menu_id: null,
+                        item_name: '',
+                        price: '',
+                        category: 'food'
+                    };
+                    this.showMenuModal = true;
+                },
+                openEditModal(menuItem) {
+                    this.isEditing = true;
+                    this.modalErrorMessage = null;
+                    this.menuForm = {
+                        menu_id: menuItem.menu_id,
+                        item_name: menuItem.item_name,
+                        price: parseFloat(menuItem.price).toFixed(2),
+                        category: menuItem.category
+                    };
+                    this.showMenuModal = true;
+                },
+                closeMenuModal() {
+                    this.showMenuModal = false;
+                },
+                async saveMenuItem() {
+                    this.modalErrorMessage = null;
+                    this.isSavingMenuItem = true;
+                    
+                    const method = this.isEditing ? 'PUT' : 'POST';
+                    const endpoint = this.isEditing 
+                        ? `/cpad-project/DNF-3/api/menus/${this.menuForm.menu_id}`
+                        : '/cpad-project/DNF-3/api/menus';
+                        
+                    try {
+                        const response = await fetch(endpoint, {
+                            method: method,
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                item_name: this.menuForm.item_name,
+                                price: parseFloat(this.menuForm.price),
+                                category: this.menuForm.category
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            this.triggerFeedbackAlert(this.isEditing ? 'Menu item updated successfully.' : 'Menu item added successfully.');
+                            this.showMenuModal = false;
+                            this.fetchVendorMenusCatalog();
+                        } else {
+                            this.modalErrorMessage = result.error || 'Server error occurred while saving menu item.';
+                        }
+                    } catch (err) {
+                        this.modalErrorMessage = 'Network Error: Failed to save menu item.';
+                        console.error('Error saving menu item:', err);
+                    } finally {
+                        this.isSavingMenuItem = false;
+                    }
+                },
+                triggerFeedbackAlert(messageText) {
+                    this.actionFeedbackMessage = messageText;
+                    setTimeout(() => { this.actionFeedbackMessage = null; }, 3000);
+                },
+                handleLogout() {
+                    // Wipe user identities from the browser storage cache tracking keys
+                    document.cookie = "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    document.cookie = "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    document.cookie = "user_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    window.location.href = 'login.html';
+                }
+            }
+        });
+        vendorAppInstance.mount('#vendorApp');
+    </script>
+
+</body>
+
+</html>

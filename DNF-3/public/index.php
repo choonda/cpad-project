@@ -109,13 +109,34 @@ $app->get('/api/menus', function (Request $request, Response $response) {
     $queryParams = $request->getQueryParams();
     $stall_id = isset($queryParams['stall_id']) ? $queryParams['stall_id'] : null;
     
+    // Enforce role-based access control for vendor menu inventory viewing
+    $cookieParams = $request->getCookieParams();
+    $role = isset($cookieParams['role']) ? $cookieParams['role'] : null;
+    $user_id = isset($cookieParams['user_id']) ? $cookieParams['user_id'] : null;
+    
+    if ($role === 'vendor') {
+        $stall_id = -1; // Default to invalid stall id if none found
+        if ($user_id) {
+            try {
+                $stmtStall = $pdo->prepare("SELECT stall_id FROM stalls WHERE vendor_id = :vendor_id");
+                $stmtStall->execute([':vendor_id' => $user_id]);
+                $stall = $stmtStall->fetch();
+                if ($stall) {
+                    $stall_id = $stall['stall_id'];
+                }
+            } catch (PDOException $ex) {
+                // Handle database errors gracefully
+            }
+        }
+    }
+    
     try {
-        if ($stall_id) {
-            // If stall_id is provided, fetch menu items belonging only to that specific stall
+        if ($stall_id !== null) {
+            // Fetch menu items belonging only to that specific stall
             $stmt = $pdo->prepare("SELECT * FROM menus WHERE stall_id = :stall_id ORDER BY category ASC, item_name ASC");
             $stmt->execute([':stall_id' => $stall_id]);
         } else {
-            // Default: Fetch all available menu offerings inside the food court ecosystem
+            // Default: Fetch all available menu offerings inside the food court ecosystem (e.g. for customers filtering overall list)
             $stmt = $pdo->prepare("SELECT * FROM menus ORDER BY item_name ASC");
             $stmt->execute();
         }
@@ -262,12 +283,162 @@ $app->put('/api/menus/{id}/toggle', function (Request $request, Response $respon
         return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
     
+    // Auth & Permission checks: Ensure that a vendor can only toggle their own menu items
+    $cookieParams = $request->getCookieParams();
+    $role = isset($cookieParams['role']) ? $cookieParams['role'] : null;
+    $user_id = isset($cookieParams['user_id']) ? $cookieParams['user_id'] : null;
+    
     try {
+        if ($role === 'vendor') {
+            $vendor_stall_id = -1; // Default to invalid stall id if none found
+            if ($user_id) {
+                $stmtStall = $pdo->prepare("SELECT stall_id FROM stalls WHERE vendor_id = :vendor_id");
+                $stmtStall->execute([':vendor_id' => $user_id]);
+                $stall = $stmtStall->fetch();
+                if ($stall) {
+                    $vendor_stall_id = $stall['stall_id'];
+                }
+            }
+            
+            // Check if the menu item exists and belongs to the vendor's stall
+            $stmtMenu = $pdo->prepare("SELECT stall_id FROM menus WHERE menu_id = :menu_id");
+            $stmtMenu->execute([':menu_id' => $menu_id]);
+            $menuItem = $stmtMenu->fetch();
+            
+            if (!$menuItem || $menuItem['stall_id'] != $vendor_stall_id) {
+                $payload['error'] = 'Access Denied: You do not have permission to edit this menu item.';
+                $response->getBody()->write(json_encode($payload));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+            }
+        }
+        
         // Availability Toggle: instantly alter menu stock visibility status to prevent order inaccuracies
         $stmt = $pdo->prepare("UPDATE menus SET is_available = :is_available WHERE menu_id = :menu_id");
         $stmt->execute([
             ':is_available' => $data['is_available'],
             ':menu_id'      => $menu_id
+        ]);
+        $payload['success'] = true;
+    } catch (PDOException $ex) {
+        $payload['error'] = $ex->getMessage();
+    }
+    
+    $response->getBody()->write(json_encode($payload));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
+// ==========================================
+// 8. Vendor Add Menu Item API (POST Method)
+// ==========================================
+$app->post('/api/menus', function (Request $request, Response $response) {
+    require __DIR__ . '/libs/db_connect_PDO_SLIM.php';
+    $data = json_decode($request->getBody()->getContents(), true);
+    $payload = ['success' => false, 'error' => null];
+    
+    // Auth & Permission checks
+    $cookieParams = $request->getCookieParams();
+    $role = isset($cookieParams['role']) ? $cookieParams['role'] : null;
+    $user_id = isset($cookieParams['user_id']) ? $cookieParams['user_id'] : null;
+    
+    if ($role !== 'vendor') {
+        $payload['error'] = 'Access Denied: Only vendors can add menu items.';
+        $response->getBody()->write(json_encode($payload));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
+    
+    if (empty($data['item_name']) || !isset($data['price']) || empty($data['category'])) {
+        $payload['error'] = 'Item name, price, and category are required fields.';
+        $response->getBody()->write(json_encode($payload));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+    
+    try {
+        // Find vendor's stall_id
+        $stmtStall = $pdo->prepare("SELECT stall_id FROM stalls WHERE vendor_id = :vendor_id");
+        $stmtStall->execute([':vendor_id' => $user_id]);
+        $stall = $stmtStall->fetch();
+        
+        if (!$stall) {
+            $payload['error'] = 'Stall configuration error: No stall assigned to your vendor account.';
+            $response->getBody()->write(json_encode($payload));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+        
+        $vendor_stall_id = $stall['stall_id'];
+        
+        // Generate new menu_id
+        $stmtCount = $pdo->query("SELECT IFNULL(MAX(menu_id), 0) FROM menus");
+        $new_menu_id = $stmtCount->fetchColumn() + 1;
+        
+        $stmt = $pdo->prepare("INSERT INTO menus (menu_id, stall_id, item_name, price, category, is_available) VALUES (:menu_id, :stall_id, :item_name, :price, :category, 1)");
+        $stmt->execute([
+            ':menu_id' => $new_menu_id,
+            ':stall_id' => $vendor_stall_id,
+            ':item_name' => $data['item_name'],
+            ':price' => $data['price'],
+            ':category' => $data['category']
+        ]);
+        
+        $payload['success'] = true;
+        $payload['menu_id'] = $new_menu_id;
+    } catch (PDOException $ex) {
+        $payload['error'] = $ex->getMessage();
+    }
+    
+    $response->getBody()->write(json_encode($payload));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
+// ==========================================
+// 9. Vendor Update Menu Item API (PUT Method)
+// ==========================================
+$app->put('/api/menus/{id}', function (Request $request, Response $response, $args) {
+    require __DIR__ . '/libs/db_connect_PDO_SLIM.php';
+    $data = json_decode($request->getBody()->getContents(), true);
+    $menu_id = $args['id'];
+    $payload = ['success' => false, 'error' => null];
+    
+    if (empty($data['item_name']) || !isset($data['price']) || empty($data['category'])) {
+        $payload['error'] = 'Item name, price, and category are required fields.';
+        $response->getBody()->write(json_encode($payload));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+    
+    // Auth & Permission checks
+    $cookieParams = $request->getCookieParams();
+    $role = isset($cookieParams['role']) ? $cookieParams['role'] : null;
+    $user_id = isset($cookieParams['user_id']) ? $cookieParams['user_id'] : null;
+    
+    try {
+        if ($role === 'vendor') {
+            $vendor_stall_id = -1;
+            if ($user_id) {
+                $stmtStall = $pdo->prepare("SELECT stall_id FROM stalls WHERE vendor_id = :vendor_id");
+                $stmtStall->execute([':vendor_id' => $user_id]);
+                $stall = $stmtStall->fetch();
+                if ($stall) {
+                    $vendor_stall_id = $stall['stall_id'];
+                }
+            }
+            
+            // Check if menu item belongs to this stall
+            $stmtMenu = $pdo->prepare("SELECT stall_id FROM menus WHERE menu_id = :menu_id");
+            $stmtMenu->execute([':menu_id' => $menu_id]);
+            $menuItem = $stmtMenu->fetch();
+            
+            if (!$menuItem || $menuItem['stall_id'] != $vendor_stall_id) {
+                $payload['error'] = 'Access Denied: You do not have permission to edit this menu item.';
+                $response->getBody()->write(json_encode($payload));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+            }
+        }
+        
+        $stmt = $pdo->prepare("UPDATE menus SET item_name = :item_name, price = :price, category = :category WHERE menu_id = :menu_id");
+        $stmt->execute([
+            ':item_name' => $data['item_name'],
+            ':price' => $data['price'],
+            ':category' => $data['category'],
+            ':menu_id' => $menu_id
         ]);
         $payload['success'] = true;
     } catch (PDOException $ex) {

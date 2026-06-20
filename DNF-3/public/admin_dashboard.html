@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arked Meranti - Master Admin Control Panel</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: sans-serif;
+        }
+
+        .navbar-brand-custom {
+            color: #800020 !important;
+            font-weight: 700;
+        }
+
+        .stat-card {
+            border: none;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="adminApp">
+        <!-- Global Header Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
+            <div class="container">
+                <a class="navbar-brand navbar-brand-custom" href="#">Arked Meranti Ecosystem Admin</a>
+                <div class="d-flex align-items-center">
+                    <span class="navbar-text mr-3 me-3 font-weight-bold text-secondary" v-if="adminUsername">
+                        Administrator: {{ adminUsername }}
+                    </span>
+                    <button v-on:click="handleLogout" class="btn btn-outline-danger btn-sm font-weight-bold">Sign
+                        Out</button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container mb-5">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="font-weight-bold text-dark mb-0">System Control Panel</h3>
+                <span class="badge bg-dark text-white p-2">Master Privilege Mode</span>
+            </div>
+
+            <!-- High-level Analytical Metric Cards -->
+            <div class="row mb-4">
+                <div class="col-md-4 mb-3">
+                    <div class="card stat-card bg-primary text-white shadow-sm p-3">
+                        <div class="card-body">
+                            <h6>Total Registered Users</h6>
+                            <h2 class="font-weight-bold">Active Records</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card stat-card bg-success text-white shadow-sm p-3">
+                        <div class="card-body">
+                            <h6>Authorized Stalls</h6>
+                            <h2 class="font-weight-bold">Arked Meranti Hub</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card stat-card bg-dark text-white shadow-sm p-3">
+                        <div class="card-body">
+                            <h6>System Integrity</h6>
+                            <h2 class="font-weight-bold">Slim / PDO Stable</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Administration Main Workspace Table Area -->
+            <div class="card shadow-sm p-4 bg-white">
+                <h4 class="font-weight-bold text-secondary mb-3 border-bottom pb-2">Ecosystem User Account Overviews
+                </h4>
+                <p class="text-muted">This layout can be extended to view, onboard, or remove system vendor accounts
+                    dynamically via future administrative endpoints.</p>
+
+                <div class="alert alert-info font-weight-bold">
+                    Core Security Check: Parameters protected by server-side parameterization statements.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script>
+        const adminAppInstance = Vue.createApp({
+            data() {
+                return { adminUsername: '' };
+            },
+            mounted() {
+                this.adminUsername = this.getCookieValueByName('username') || 'System Administrator';
+                // Verify that the person attempting to view the page holds admin privileges
+                const role = this.getCookieValueByName('role');
+                if (role !== 'admin') {
+                    window.location.href = 'login.html';
+                }
+            },
+            methods: {
+                getCookieValueByName(cookieName) {
+                    const match = document.cookie.match(new RegExp('(^| )' + cookieName + '=([^;]+)'));
+                    return match ? decodeURIComponent(match[2]) : null;
+                },
+                handleLogout() {
+                    document.cookie = "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    document.cookie = "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    document.cookie = "user_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    window.location.href = 'login.html';
+                }
+            }
+        });
+        adminAppInstance.mount('#adminApp');
+    </script>
+</body>
+
+</html>

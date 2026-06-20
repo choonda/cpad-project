@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arked Meranti - My Orders & Tracking</title>
+
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+
+    <style>
+        body {
+            background-color: #f4f6f9;
+            font-family: sans-serif;
+        }
+
+        .navbar-brand-custom {
+            color: #800020 !important;
+            /* Deep Burgundy theme styling */
+            font-weight: 700;
+        }
+
+        .order-card {
+            border: none;
+            border-radius: 10px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .status-badge {
+            font-size: 0.9rem;
+            padding: 6px 12px;
+            border-radius: 20px;
+        }
+
+        .status-received {
+            background-color: #e3f2fd;
+            color: #0d47a1;
+            border: 1px solid #bbdefb;
+        }
+
+        .status-preparing {
+            background-color: #fff3e0;
+            color: #e65100;
+            border: 1px solid #ffe0b2;
+        }
+
+        .status-ready {
+            background-color: #e8f5e9;
+            color: #1b5e20;
+            border: 1px solid #c8e6c9;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ordersApp">
+        <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
+            <div class="container">
+                <a class="navbar-brand navbar-brand-custom" href="#">Arked Meranti Digital Hub</a>
+                <div class="d-flex align-items-center">
+                    <span class="navbar-text mr-3 me-3 font-weight-bold text-secondary" v-if="username">
+                        Logged in: {{ username }}
+                    </span>
+                    <a href="customer_dashboard.html" class="btn btn-outline-primary btn-sm mr-2 me-2 font-weight-bold">Back
+                        to Menu</a>
+                    <button v-on:click="handleLogout" class="btn btn-outline-danger btn-sm font-weight-bold">Sign
+                        Out</button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container mb-5">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="font-weight-bold text-dark mb-0">My Order History & Live Tracking</h3>
+                <span class="badge bg-white text-muted border p-2 font-weight-bold">
+                    Auto-refreshing status live every 5s
+                </span>
+            </div>
+
+            <div v-if="errorMessage" class="alert alert-danger font-weight-bold shadow-sm" role="alert">
+                {{ errorMessage }}
+            </div>
+
+            <div class="row">
+                <div class="col-12" v-if="ordersHistory.length > 0">
+                    <div class="card order-card shadow-sm p-4 mb-3 bg-white" v-for="order in ordersHistory"
+                        v-bind:key="order.order_id">
+                        <div class="row align-items-center">
+
+                            <div class="col-md-3 mb-2 mb-md-0">
+                                <h5 class="font-weight-bold text-secondary mb-1">Order #{{ order.order_id }}</h5>
+                                <small class="text-muted d-block font-weight-bold">Placed on:</small>
+                                <small class="text-muted">{{ order.order_date }}</small>
+                            </div>
+
+                            <div class="col-md-3 mb-2 mb-md-0">
+                                <span class="text-muted font-weight-bold small d-block">Amount Charged:</span>
+                                <h4 class="text-success font-weight-bold mb-0">RM {{
+                                    parseFloat(order.total_price).toFixed(2) }}</h4>
+                            </div>
+
+                            <div class="col-md-3 mb-3 mb-md-0">
+                                <span class="text-muted font-weight-bold small d-block mb-1">Fulfillment Status:</span>
+                                <span
+                                    v-bind:class="['badge', 'status-badge', 'font-weight-bold', getStatusClass(order.status)]">
+                                    {{ order.status }}
+                                </span>
+                            </div>
+
+                            <div class="col-md-3 text-md-right">
+                                <div v-if="order.status === 'Received'" class="text-primary font-weight-bold small">
+                                    Waiting for Kitchen Acceptance
+                                </div>
+                                <div v-else-if="order.status === 'Preparing'"
+                                    class="text-warning font-weight-bold small">
+                                    Chef is preparing your dishes
+                                </div>
+                                <div v-else-if="order.status === 'Ready'" class="text-success font-weight-bold">
+                                    Ready for Pickup! Please claim at stall.
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 text-center py-5" v-else>
+                    <div class="card p-5 shadow-sm border-0 bg-white">
+                        <h4 class="text-muted font-weight-bold">No Transaction History Recorded</h4>
+                        <p class="text-muted mb-4">You have not submitted any food requests to Arked Meranti stalls yet.
+                        </p>
+                        <div>
+                            <a href="customer_dashboard.html" class="btn btn-primary font-weight-bold px-4">Browse
+                                Marketplace Now</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <script>
+        const ordersAppInstance = Vue.createApp({
+            data() {
+                return {
+                    username: '',
+                    customerId: null,
+                    ordersHistory: [],
+                    errorMessage: null,
+                    pollingIntervalId: null
+                };
+            },
+            mounted() {
+                // Read tracking authentication values from initialized identity cookies
+                this.username = this.getCookieValueByName('username') || 'Valued Guest';
+                this.customerId = this.getCookieValueByName('user_id');
+
+                if (!this.customerId) {
+                    this.errorMessage = 'Authorization Error: Customer validation expired. Please navigate back to login.';
+                    return;
+                }
+
+                // Fire initial request retrieval sequence data fetch
+                this.fetchCustomerOrders();
+
+                // Establish the background live-update synchronization interval pooling thread
+                this.pollingIntervalId = setInterval(() => {
+                    this.fetchCustomerOrders();
+                }, 5000); // 5000 milliseconds = 5 seconds execution block interval loop
+            },
+            unmounted() {
+                // Securely kill background interval timers when window context shifts to prevent memory leaks
+                if (this.pollingIntervalId) {
+                    clearInterval(this.pollingIntervalId);
+                }
+            },
+            methods: {
+                getCookieValueByName(cookieName) {
+                    const match = document.cookie.match(new RegExp('(^| )' + cookieName + '=([^;]+)'));
+                    return match ? decodeURIComponent(match[2]) : null;
+                },
+                // Pull tracking transaction records strictly filtered by current client user credential keys
+                async fetchCustomerOrders() {
+                    try {
+                        const endpointUrl = `/cpad-project/DNF-3/api/orders?customer_id=${this.customerId}`;
+                        const response = await fetch(endpointUrl);
+                        const outcomeData = await response.json();
+
+                        if (outcomeData.success) {
+                            this.ordersHistory = outcomeData.data;
+                        } else {
+                            this.errorMessage = outcomeData.error || 'Failed to update live transaction pipelines tracking maps.';
+                        }
+                    } catch (netErr) {
+                        console.error('Tracking pooling error dropped:', netErr);
+                        // Do not flood screen with raw network anomalies during background auto-refresh cycles
+                    }
+                },
+                // Map table status enum tokens directly to contextual CSS styling parameters
+                getStatusClass(statusValue) {
+                    if (statusValue === 'Received') return 'status-received';
+                    if (statusValue === 'Preparing') return 'status-preparing';
+                    if (statusValue === 'Ready') return 'status-ready';
+                    return 'bg-secondary text-white';
+                },
+                handleLogout() {
+                    // Clear state identity variables from the running browser context
+                    document.cookie = "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    document.cookie = "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    document.cookie = "user_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    window.location.href = 'login.html';
+                }
+            }
+        });
+
+        ordersAppInstance.mount('#ordersApp');
+    </script>
+
+</body>
+
+</html>
