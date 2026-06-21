@@ -89,7 +89,7 @@
         <!-- Global Header Navigation Bar Bar -->
         <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
             <div class="container">
-                <a class="navbar-brand navbar-brand-custom" href="#">Arked Meranti Kiosk Workspace</a>
+                <a class="navbar-brand navbar-brand-custom" href="#">Arked Meranti Ordering System</a>
                 <div class="d-flex align-items-center">
                     <span class="navbar-text mr-3 me-3 font-weight-bold text-secondary" v-if="vendorUsername">
                         Stall Operator: {{ vendorUsername }}
@@ -107,7 +107,7 @@
                     <button
                         v-bind:class="['nav-link', activeViewTab === 'orders' ? 'active btn-dark' : 'text-secondary font-weight-bold']"
                         v-on:click="activeViewTab = 'orders'">
-                        Live Order Tickets Queue ({{ totalPendingOrdersCount }})
+                        Order Queue ({{ totalPendingOrdersCount }})
                     </button>
                 </li>
                 <li class="nav-item">
@@ -115,6 +115,13 @@
                         v-bind:class="['nav-link', activeViewTab === 'inventory' ? 'active btn-dark' : 'text-secondary font-weight-bold']"
                         v-on:click="activeViewTab = 'inventory'">
                         Stock Availability Management
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button
+                        v-bind:class="['nav-link', activeViewTab === 'history' ? 'active btn-dark' : 'text-secondary font-weight-bold']"
+                        v-on:click="activeViewTab = 'history'">
+                        Order History
                     </button>
                 </li>
             </ul>
@@ -135,9 +142,8 @@
                                 v-bind:key="order.order_id">
                                 <div class="row align-items-center">
                                     <div class="col-md-3">
-                                        <span class="badge bg-light text-dark border font-weight-bold mb-1">Ticket #{{
-                                            order.order_id }}</span>
-                                        <h5 class="font-weight-bold mb-0 text-dark">User: {{ order.customer_name }}</h5>
+                                        <h5 class="font-weight-bold mb-1 text-dark">Order #{{ order.stall_order_id || order.order_id }}</h5>
+                                        <div class="font-weight-bold text-secondary mb-1">User: {{ order.customer_name }}</div>
                                         <small class="text-muted font-weight-bold">{{ order.order_date }}</small>
                                     </div>
                                     <div class="col-md-3">
@@ -214,13 +220,13 @@
                                     <td class="text-center">
                                         <!-- Interactive Custom Checkbox Configuration for Real-time Stock Updates -->
                                         <label class="switch-toggle mb-0">
-                                            <input type="checkbox" v-bind:checked="menuItem.is_available == 1"
+                                            <input type="checkbox" v-bind:checked="menuItem.is_available"
                                                 v-on:change="toggleItemStockAvailability(menuItem.menu_id, $event.target.checked)">
                                             <span class="slider-toggle"></span>
                                         </label>
                                         <span class="d-block small font-weight-bold mt-1"
-                                            v-bind:class="menuItem.is_available == 1 ? 'text-success' : 'text-danger'">
-                                            {{ menuItem.is_available == 1 ? 'In Stock' : 'Out of Stock' }}
+                                            v-bind:class="menuItem.is_available ? 'text-success' : 'text-danger'">
+                                            {{ menuItem.is_available ? 'In Stock' : 'Out of Stock' }}
                                         </span>
                                     </td>
                                     <td class="text-center">
@@ -229,6 +235,48 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEGMENT FRAME 3: Completed Orders History -->
+            <div v-if="activeViewTab === 'history'">
+                <div class="row">
+                    <div class="col-12">
+                        <h4 class="font-weight-bold text-secondary mb-3">Completed Orders History</h4>
+
+                        <div v-if="completedOrdersHistory.length > 0">
+                            <div class="card ticket-card shadow-sm p-4 mb-3 bg-white" style="border-left: 5px solid #1b5e20;" v-for="order in completedOrdersHistory"
+                                v-bind:key="order.order_id">
+                                <div class="row align-items-center">
+                                    <div class="col-md-3">
+                                        <h5 class="font-weight-bold mb-1 text-dark">Order #{{ order.stall_order_id || order.order_id }}</h5>
+                                        <div class="font-weight-bold text-secondary mb-1">User: {{ order.customer_name }}</div>
+                                        <small class="text-muted font-weight-bold">{{ order.order_date }}</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <small class="text-muted font-weight-bold d-block">Bill Aggregate:</small>
+                                        <span class="text-success font-weight-bold h5">RM {{
+                                            parseFloat(order.total_price).toFixed(2) }}</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <small class="text-muted font-weight-bold d-block mb-1">Fulfillment
+                                            State:</small>
+                                        <span class="badge bg-success text-white font-weight-bold px-3 py-2">
+                                            {{ order.status }}
+                                        </span>
+                                    </div>
+                                    <div class="col-md-3 text-md-right mt-3 mt-md-0">
+                                        <span class="text-success font-weight-bold small"><i class="bi bi-check-circle-fill"></i> Served & Completed</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center py-5 text-muted bg-white rounded shadow-sm" v-else>
+                            <p class="mb-0 h5 font-weight-bold text-secondary">No completed orders found.</p>
+                            <small>Fulfill active orders from the queue to populate history.</small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -307,6 +355,9 @@
                 },
                 totalPendingOrdersCount() {
                     return this.ordersQueue.length;
+                },
+                completedOrdersHistory() {
+                    return this.allOrdersCollection.filter(o => o.status === 'Ready');
                 }
             },
             mounted() {

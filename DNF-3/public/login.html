@@ -43,14 +43,19 @@
             </div>
 
             <div class="card shadow-sm p-4">
-                <h4 class="card-title mb-4 font-weight-bold text-secondary">Account Authentication</h4>
+                <h4 class="card-title mb-4 font-weight-bold text-secondary">
+                    {{ isRegisterMode ? 'Account Registration' : 'Account Authentication' }}
+                </h4>
 
                 <div v-if="errorMessage" class="alert alert-danger font-weight-bold" role="alert">
                     {{ errorMessage }}
                 </div>
+                <div v-if="successMessage" class="alert alert-success font-weight-bold" role="alert">
+                    {{ successMessage }}
+                </div>
 
-                <form v-on:submit.prevent="handleLoginSubmit">
-
+                <!-- Sign In Form -->
+                <form v-if="!isRegisterMode" v-on:submit.prevent="handleLoginSubmit">
                     <div class="form-group mb-3">
                         <label for="usernameInput" class="form-label font-weight-bold text-muted">Username</label>
                         <input type="text" id="usernameInput" class="form-control form-control-lg"
@@ -63,12 +68,66 @@
                             placeholder="Enter your security password" v-model="loginModel.password" required>
                     </div>
 
-                    <button type="submit" class="btn btn-primary btn-lg w-100 font-weight-bold"
+                    <button type="submit" class="btn btn-primary btn-lg w-100 font-weight-bold mb-3"
                         v-bind:disabled="isProcessing">
                         <span v-if="isProcessing" class="spinner-border spinner-border-sm mr-2 me-2" role="status"
                             aria-hidden="true"></span>
                         {{ isProcessing ? 'Authenticating Credentials...' : 'Sign In' }}
                     </button>
+
+                    <div class="text-center">
+                        <a href="#" v-on:click.prevent="toggleAuthMode" class="font-weight-bold text-decoration-none" style="color: #800020;">
+                            Don't have an account? Register here
+                        </a>
+                    </div>
+                </form>
+
+                <!-- Registration Form -->
+                <form v-else v-on:submit.prevent="handleRegisterSubmit">
+                    <div class="form-group mb-3">
+                        <label for="regUsernameInput" class="form-label font-weight-bold text-muted">Username</label>
+                        <input type="text" id="regUsernameInput" class="form-control form-control-lg"
+                            placeholder="Choose a unique username" v-model="registerModel.username" required>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label for="regEmailInput" class="form-label font-weight-bold text-muted">Email Address</label>
+                        <input type="email" id="regEmailInput" class="form-control form-control-lg"
+                            placeholder="Enter your email address" v-model="registerModel.email" required>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label for="regPasswordInput" class="form-label font-weight-bold text-muted">Password</label>
+                        <input type="password" id="regPasswordInput" class="form-control form-control-lg"
+                            placeholder="Choose a secure password" v-model="registerModel.password" required>
+                    </div>
+
+                    <div class="form-group mb-4">
+                        <label for="regRoleInput" class="form-label font-weight-bold text-muted">Account Type (Role)</label>
+                        <select id="regRoleInput" class="form-control form-control-lg" v-model="registerModel.role" required>
+                            <option value="customer">Customer</option>
+                            <option value="vendor">Vendor</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group mb-4" v-if="registerModel.role === 'vendor'">
+                        <label for="regStallNameInput" class="form-label font-weight-bold text-muted">Stall Name</label>
+                        <input type="text" id="regStallNameInput" class="form-control form-control-lg"
+                            placeholder="Enter your stall name" v-model="registerModel.stall_name" v-bind:required="registerModel.role === 'vendor'">
+                    </div>
+
+                    <button type="submit" class="btn btn-success btn-lg w-100 font-weight-bold mb-3"
+                        v-bind:disabled="isProcessing">
+                        <span v-if="isProcessing" class="spinner-border spinner-border-sm mr-2 me-2" role="status"
+                            aria-hidden="true"></span>
+                        {{ isProcessing ? 'Registering Account...' : 'Register' }}
+                    </button>
+
+                    <div class="text-center">
+                        <a href="#" v-on:click.prevent="toggleAuthMode" class="font-weight-bold text-decoration-none" style="color: #800020;">
+                            Already have an account? Sign In
+                        </a>
+                    </div>
                 </form>
             </div>
 
@@ -86,19 +145,41 @@
         const appInstance = Vue.createApp({
             data() {
                 return {
+                    isRegisterMode: false,
                     // Reactive data properties mapping precisely to the system state models
                     loginModel: {
                         username: '',
                         password: ''
                     },
+                    registerModel: {
+                        username: '',
+                        email: '',
+                        password: '',
+                        role: 'customer',
+                        stall_name: ''
+                    },
                     errorMessage: null,
+                    successMessage: null,
                     isProcessing: false
                 };
             },
             methods: {
+                toggleAuthMode() {
+                    this.isRegisterMode = !this.isRegisterMode;
+                    this.errorMessage = null;
+                    this.successMessage = null;
+                    this.loginModel.username = '';
+                    this.loginModel.password = '';
+                    this.registerModel.username = '';
+                    this.registerModel.email = '';
+                    this.registerModel.password = '';
+                    this.registerModel.role = 'customer';
+                    this.registerModel.stall_name = '';
+                },
                 // Asynchronous handler function to capture form intercept events
                 async handleLoginSubmit() {
                     this.errorMessage = null;
+                    this.successMessage = null;
                     this.isProcessing = true;
 
                     const targetEndpoint = '/cpad-project/DNF-3/api/login';
@@ -126,6 +207,46 @@
                             } else {
                                 this.errorMessage = 'System Exception: Unauthorized user domain privileges allocation.';
                             }
+                        } else {
+                            this.errorMessage = responseData.error || 'Authentication failure.';
+                        }
+                    } catch (networkError) {
+                        this.errorMessage = 'Network Routing Exception: Unable to establish contact with the Slim API application environment.';
+                        console.error('AJAX Failure Details:', networkError);
+                    } finally {
+                        this.isProcessing = false;
+                    }
+                },
+                // Registration form submission handler
+                async handleRegisterSubmit() {
+                    this.errorMessage = null;
+                    this.successMessage = null;
+                    this.isProcessing = true;
+
+                    const targetEndpoint = '/cpad-project/DNF-3/api/register';
+
+                    try {
+                        const response = await fetch(targetEndpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify(this.registerModel)
+                        });
+
+                        const responseData = await response.json();
+
+                        if (response.ok && responseData.success) {
+                            this.successMessage = responseData.message || 'Registration successful!';
+                            // Switch back to login form after a short delay and pre-fill username
+                            const registeredUsername = this.registerModel.username;
+                            setTimeout(() => {
+                                this.toggleAuthMode();
+                                this.loginModel.username = registeredUsername;
+                            }, 3000);
+                        } else {
+                            this.errorMessage = responseData.error || 'Registration failed.';
                         }
                     } catch (networkError) {
                         this.errorMessage = 'Network Routing Exception: Unable to establish contact with the Slim API application environment.';

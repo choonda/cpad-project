@@ -30,7 +30,7 @@
         <!-- Global Header Navigation -->
         <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
             <div class="container">
-                <a class="navbar-brand navbar-brand-custom" href="#">Arked Meranti Ecosystem Admin</a>
+                <a class="navbar-brand navbar-brand-custom" href="#">Arked Meranti Online Ordering System</a>
                 <div class="d-flex align-items-center">
                     <span class="navbar-text mr-3 me-3 font-weight-bold text-secondary" v-if="adminUsername">
                         Administrator: {{ adminUsername }}
@@ -42,9 +42,8 @@
         </nav>
 
         <div class="container mb-5">
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="mb-4">
                 <h3 class="font-weight-bold text-dark mb-0">System Control Panel</h3>
-                <span class="badge bg-dark text-white p-2">Master Privilege Mode</span>
             </div>
 
             <!-- High-level Analytical Metric Cards -->
@@ -53,7 +52,7 @@
                     <div class="card stat-card bg-primary text-white shadow-sm p-3">
                         <div class="card-body">
                             <h6>Total Registered Users</h6>
-                            <h2 class="font-weight-bold">Active Records</h2>
+                            <h2 class="font-weight-bold">{{ stats.total_users !== undefined ? stats.total_users : '...' }}</h2>
                         </div>
                     </div>
                 </div>
@@ -61,15 +60,15 @@
                     <div class="card stat-card bg-success text-white shadow-sm p-3">
                         <div class="card-body">
                             <h6>Authorized Stalls</h6>
-                            <h2 class="font-weight-bold">Arked Meranti Hub</h2>
+                            <h2 class="font-weight-bold">{{ stats.total_stalls !== undefined ? stats.total_stalls : '...' }}</h2>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4 mb-3">
                     <div class="card stat-card bg-dark text-white shadow-sm p-3">
                         <div class="card-body">
-                            <h6>System Integrity</h6>
-                            <h2 class="font-weight-bold">Slim / PDO Stable</h2>
+                            <h6>Pending Vendor Approvals</h6>
+                            <h2 class="font-weight-bold">{{ stats.pending_vendors !== undefined ? stats.pending_vendors : '...' }}</h2>
                         </div>
                     </div>
                 </div>
@@ -77,13 +76,61 @@
 
             <!-- Administration Main Workspace Table Area -->
             <div class="card shadow-sm p-4 bg-white">
-                <h4 class="font-weight-bold text-secondary mb-3 border-bottom pb-2">Ecosystem User Account Overviews
-                </h4>
-                <p class="text-muted">This layout can be extended to view, onboard, or remove system vendor accounts
-                    dynamically via future administrative endpoints.</p>
+                <h4 class="font-weight-bold text-secondary mb-3 border-bottom pb-2">Vendor Account Overviews</h4>
+                
+                <div v-if="feedbackMessage" class="alert alert-success font-weight-bold shadow-sm mb-3">
+                    {{ feedbackMessage }}
+                </div>
+                <div v-if="errorMessage" class="alert alert-danger font-weight-bold shadow-sm mb-3">
+                    {{ errorMessage }}
+                </div>
 
-                <div class="alert alert-info font-weight-bold">
-                    Core Security Check: Parameters protected by server-side parameterization statements.
+                <div class="table-responsive" v-if="vendorsList.length > 0">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr class="text-muted text-uppercase font-weight-bold small">
+
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Stall Name</th>
+                                <th>Status</th>
+                                <th class="text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="vendor in vendorsList" v-bind:key="vendor.user_id">
+
+                                <td class="font-weight-bold text-dark">{{ vendor.username }}</td>
+                                <td>{{ vendor.email }}</td>
+                                <td>
+                                    <span v-if="vendor.stall_name" class="font-weight-bold text-secondary">
+                                        {{ vendor.stall_name }}
+                                    </span>
+                                    <span v-else class="text-muted italic">No Stall Assigned</span>
+                                </td>
+                                <td>
+                                    <span v-bind:class="['badge', vendor.is_verified ? 'bg-success' : 'bg-warning text-dark', 'font-weight-bold', 'px-2', 'py-1']">
+                                        {{ vendor.is_verified ? 'Verified' : 'Pending Verification' }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <button 
+                                        v-if="!vendor.is_verified" 
+                                        v-on:click="approveVendor(vendor.user_id)" 
+                                        class="btn btn-success btn-sm font-weight-bold shadow-sm"
+                                        v-bind:disabled="processingId === vendor.user_id"
+                                    >
+                                        <span v-if="processingId === vendor.user_id" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        Verify & Approve
+                                    </button>
+                                    <span v-else class="text-success font-weight-bold small">Active Vendor</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-center py-5 text-muted" v-else>
+                    <p class="mb-0 h5 font-weight-bold text-secondary">No vendors registered in the system yet.</p>
                 </div>
             </div>
         </div>
@@ -93,7 +140,18 @@
     <script>
         const adminAppInstance = Vue.createApp({
             data() {
-                return { adminUsername: '' };
+                return {
+                    adminUsername: '',
+                    stats: {
+                        total_users: 0,
+                        total_stalls: 0,
+                        pending_vendors: 0
+                    },
+                    vendorsList: [],
+                    feedbackMessage: null,
+                    errorMessage: null,
+                    processingId: null
+                };
             },
             mounted() {
                 this.adminUsername = this.getCookieValueByName('username') || 'System Administrator';
@@ -101,12 +159,55 @@
                 const role = this.getCookieValueByName('role');
                 if (role !== 'admin') {
                     window.location.href = 'login.html';
+                } else {
+                    this.fetchDashboardData();
                 }
             },
             methods: {
                 getCookieValueByName(cookieName) {
                     const match = document.cookie.match(new RegExp('(^| )' + cookieName + '=([^;]+)'));
                     return match ? decodeURIComponent(match[2]) : null;
+                },
+                async fetchDashboardData() {
+                    try {
+                        const response = await fetch('/cpad-project/DNF-3/api/admin/dashboard-stats');
+                        const responseData = await response.json();
+                        if (responseData.success) {
+                            this.stats = responseData.stats;
+                            this.vendorsList = responseData.vendors;
+                        } else {
+                            this.errorMessage = responseData.error || 'Failed to fetch administrator stats.';
+                        }
+                    } catch (err) {
+                        this.errorMessage = 'Network Error: Unable to contact the API stats service.';
+                        console.error(err);
+                    }
+                },
+                async approveVendor(vendorId) {
+                    this.errorMessage = null;
+                    this.feedbackMessage = null;
+                    this.processingId = vendorId;
+
+                    try {
+                        const response = await fetch(`/cpad-project/DNF-3/api/admin/vendors/${vendorId}/verify`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        const responseData = await response.json();
+                        if (response.ok && responseData.success) {
+                            this.feedbackMessage = responseData.message || 'Vendor verified successfully.';
+                            this.fetchDashboardData(); // Refresh the list and stats
+                        } else {
+                            this.errorMessage = responseData.error || 'Failed to verify vendor account.';
+                        }
+                    } catch (err) {
+                        this.errorMessage = 'Network Error: Failed to perform vendor verification.';
+                        console.error(err);
+                    } finally {
+                        this.processingId = null;
+                    }
                 },
                 handleLogout() {
                     document.cookie = "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";

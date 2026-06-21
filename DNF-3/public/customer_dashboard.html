@@ -1,40 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Arked Meranti - Customer Ordering Dashboard</title>
-    
+
     <link rel="stylesheet" href="css/bootstrap.min.css">
-    
+
     <style>
         body {
             background-color: #f4f6f9;
             font-family: sans-serif;
         }
+
         .navbar-brand-custom {
-            color: #800020 !important; /* Deep Burgundy theme styling */
+            color: #800020 !important;
+            /* Deep Burgundy theme styling */
             font-weight: 700;
         }
+
         .stall-badge {
             cursor: pointer;
             transition: all 0.2s ease-in-out;
         }
+
         .stall-badge:hover {
             transform: translateY(-2px);
         }
+
         .menu-card {
             border: none;
             border-radius: 8px;
             transition: transform 0.2s;
         }
+
         .menu-card:hover {
             transform: scale(1.02);
         }
+
         .cart-sticky {
             position: sticky;
             top: 20px;
         }
+
         .category-header {
             border-left: 4px solid #800020;
             padding-left: 10px;
@@ -42,322 +51,325 @@
         }
     </style>
 </head>
+
 <body>
 
-<div id="customerApp">
-    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
-        <div class="container">
-            <a class="navbar-brand navbar-brand-custom" href="#">Arked Meranti Digital Hub</a>
-            <div class="d-flex align-items-center">
-                <span class="navbar-text mr-3 me-3 font-weight-bold text-secondary" v-if="username">
-                    Welcome, {{ username }} (Customer)
-                </span>
-                <a href="customer_orders.html" class="btn btn-outline-primary btn-sm mr-2 me-2 font-weight-bold">My Orders</a>
-                <button v-on:click="handleLogout" class="btn btn-outline-danger btn-sm font-weight-bold">Sign Out</button>
+    <div id="customerApp">
+        <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
+            <div class="container">
+                <a class="navbar-brand navbar-brand-custom" href="#">Arked Meranti Online Ordering System</a>
+                <div class="d-flex align-items-center">
+                    <span class="navbar-text mr-3 me-3 font-weight-bold text-secondary" v-if="username">
+                        Welcome, {{ username }} (Customer)
+                    </span>
+                    <a href="customer_orders.html" class="btn btn-outline-primary btn-sm mr-2 me-2 font-weight-bold">My
+                        Orders</a>
+                    <button v-on:click="handleLogout" class="btn btn-outline-danger btn-sm font-weight-bold">Sign
+                        Out</button>
+                </div>
             </div>
-        </div>
-    </nav>
+        </nav>
 
-    <div class="container mb-5">
-        <div v-if="statusMessage" v-bind:class="['alert', isError ? 'alert-danger' : 'alert-success', 'font-weight-bold']" role="alert">
-            {{ statusMessage }}
-        </div>
-
-        <div class="row">
-            <div class="col-lg-8">
-                
-                <div class="card p-3 shadow-sm mb-4">
-                    <h5 class="text-muted font-weight-bold mb-3">Filter by Vendor Kiosk</h5>
-                    <div class="d-flex flex-wrap gap-2">
-                        <button 
-                            v-bind:class="['btn', selectedStallId === null ? 'btn-dark' : 'btn-outline-dark', 'mr-2', 'me-2', 'mb-2', 'font-weight-bold']"
-                            v-on:click="filterByStall(null)"
-                        >
-                            All Food & Drinks
-                        </button>
-                        <button 
-                            v-for="stall in stallsCollection" 
-                            v-bind:key="stall.stall_id"
-                            v-bind:class="['btn', selectedStallId === stall.stall_id ? 'btn-dark' : 'btn-outline-dark', 'mr-2', 'me-2', 'mb-2', 'font-weight-bold']"
-                            v-on:click="filterByStall(stall.stall_id)"
-                        >
-                            {{ stall.stall_name }}
-                        </button>
-                    </div>
-                </div>
-
-                <h4 class="category-header font-weight-bold mb-3">Available Main Dishes</h4>
-                <div class="row mb-4">
-                    <div class="col-md-6 mb-3" v-for="item in filteredFoodItems" v-bind:key="item.menu_id">
-                        <div class="card menu-card shadow-sm h-100 p-3">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h5 class="font-weight-bold text-dark mb-1">{{ item.item_name }}</h5>
-                                    <p class="text-success font-weight-bold mb-2">RM {{ parseFloat(item.price).toFixed(2) }}</p>
-                                </div>
-                                <span class="badge bg-light text-secondary font-weight-bold border">Food</span>
-                            </div>
-                            <div class="mt-auto">
-                                <button 
-                                    v-on:click="addItemToCart(item)"
-                                    class="btn btn-primary btn-sm w-100 font-weight-bold mt-2"
-                                    v-bind:disabled="item.is_available == 0"
-                                >
-                                    {{ item.is_available == 1 ? 'Add to Cart' : 'Sold Out' }}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 text-center text-muted py-3" v-if="filteredFoodItems.length === 0">
-                        No food choices matching this category are online today.
-                    </div>
-                </div>
-
-                <h4 class="category-header font-weight-bold mb-3">Refreshing Beverages</h4>
-                <div class="row">
-                    <div class="col-md-6 mb-3" v-for="item in filteredBeverageItems" v-bind:key="item.menu_id">
-                        <div class="card menu-card shadow-sm h-100 p-3">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h5 class="font-weight-bold text-dark mb-1">{{ item.item_name }}</h5>
-                                    <p class="text-success font-weight-bold mb-2">RM {{ parseFloat(item.price).toFixed(2) }}</p>
-                                </div>
-                                <span class="badge bg-light text-secondary font-weight-bold border">Drink</span>
-                            </div>
-                            <div class="mt-auto">
-                                <button 
-                                    v-on:click="addItemToCart(item)"
-                                    class="btn btn-primary btn-sm w-100 font-weight-bold mt-2"
-                                    v-bind:disabled="item.is_available == 0"
-                                >
-                                    {{ item.is_available == 1 ? 'Add to Cart' : 'Sold Out' }}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 text-center text-muted py-3" v-if="filteredBeverageItems.length === 0">
-                        No beverage choices matching this category are online today.
-                    </div>
-                </div>
-
+        <div class="container mb-5">
+            <div v-if="statusMessage"
+                v-bind:class="['alert', isError ? 'alert-danger' : 'alert-success', 'font-weight-bold']" role="alert">
+                {{ statusMessage }}
             </div>
 
-            <div class="col-lg-4">
-                <div class="card cart-sticky shadow-sm p-3 bg-white">
-                    <h4 class="font-weight-bold text-secondary mb-3 border-bottom pb-2">Your Digital Cart</h4>
-                    
-                    <div v-if="shoppingCart.length > 0">
-                        <div class="mb-3 border-bottom pb-2" v-for="(cartItem, index) in shoppingCart" v-bind:key="cartItem.menu_id">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="font-weight-bold text-dark">{{ cartItem.item_name }}</span>
-                                <span class="text-muted font-weight-bold text-sm">RM {{ (cartItem.price * cartItem.quantity).toFixed(2) }}</span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary btn-sm px-2 font-weight-bold" v-on:click="updateItemQuantity(index, -1)">-</button>
-                                    <span class="btn btn-light disabled btn-sm font-weight-bold text-dark px-3">{{ cartItem.quantity }}</span>
-                                    <button class="btn btn-outline-secondary btn-sm px-2 font-weight-bold" v-on:click="updateItemQuantity(index, 1)">+</button>
-                                </div>
-                                <button class="btn btn-link btn-sm text-danger font-weight-bold p-0" v-on:click="removeItemFromCart(index)">Remove</button>
-                            </div>
-                        </div>
+            <div class="row">
+                <div class="col-lg-8">
 
-                        <div class="d-flex justify-content-between align-items-center mt-4 mb-4">
-                            <h5 class="font-weight-bold text-secondary">Total Bill:</h5>
-                            <h4 class="font-weight-bold text-success">RM {{ calculatedCartTotal.toFixed(2) }}</h4>
+                    <div class="card p-3 shadow-sm mb-4">
+                        <h5 class="text-muted font-weight-bold mb-3">Filter by Stall</h5>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button
+                                v-bind:class="['btn', selectedStallId === null ? 'btn-dark' : 'btn-outline-dark', 'mr-2', 'me-2', 'mb-2', 'font-weight-bold']"
+                                v-on:click="filterByStall(null)">
+                                All Food & Drinks
+                            </button>
+                            <button v-for="stall in stallsCollection" v-bind:key="stall.stall_id"
+                                v-bind:class="['btn', selectedStallId === stall.stall_id ? 'btn-dark' : 'btn-outline-dark', 'mr-2', 'me-2', 'mb-2', 'font-weight-bold']"
+                                v-on:click="filterByStall(stall.stall_id)">
+                                {{ stall.stall_name }}
+                            </button>
                         </div>
-
-                        <button 
-                            v-on:click="executeCheckoutRoutine" 
-                            class="btn btn-success btn-lg w-100 font-weight-bold shadow-sm"
-                            v-bind:disabled="isSubmittingOrder"
-                        >
-                            <span v-if="isSubmittingOrder" class="spinner-border spinner-border-sm mr-2 me-2" role="status" aria-hidden="true"></span>
-                            {{ isSubmittingOrder ? 'Processing Secure Checkout...' : 'Confirm Place Order' }}
-                        </button>
                     </div>
 
-                    <div class="text-center py-5 text-muted" v-else>
-                        <p class="mb-0 font-weight-bold">Your cart is completely empty.</p>
-                        <small>Select delicious campus meals to populate your ticket.</small>
+                    <h4 class="category-header font-weight-bold mb-3">Food</h4>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3" v-for="item in filteredFoodItems" v-bind:key="item.menu_id">
+                            <div class="card menu-card shadow-sm h-100 p-3">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h5 class="font-weight-bold text-dark mb-1">{{ item.item_name }}</h5>
+                                        <p class="text-success font-weight-bold mb-2">RM {{
+                                            parseFloat(item.price).toFixed(2) }}</p>
+                                    </div>
+                                    <span class="badge bg-light text-secondary font-weight-bold border">Food</span>
+                                </div>
+                                <div class="mt-auto">
+                                    <button v-on:click="addItemToCart(item)"
+                                        class="btn btn-primary btn-sm w-100 font-weight-bold mt-2"
+                                        v-bind:disabled="!item.is_available">
+                                        {{ item.is_available ? 'Add to Cart' : 'Sold Out' }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 text-center text-muted py-3" v-if="filteredFoodItems.length === 0">
+                            No food choices matching this category are online today.
+                        </div>
+                    </div>
+
+                    <h4 class="category-header font-weight-bold mb-3">Beverages</h4>
+                    <div class="row">
+                        <div class="col-md-6 mb-3" v-for="item in filteredBeverageItems" v-bind:key="item.menu_id">
+                            <div class="card menu-card shadow-sm h-100 p-3">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h5 class="font-weight-bold text-dark mb-1">{{ item.item_name }}</h5>
+                                        <p class="text-success font-weight-bold mb-2">RM {{
+                                            parseFloat(item.price).toFixed(2) }}</p>
+                                    </div>
+                                    <span class="badge bg-light text-secondary font-weight-bold border">Drink</span>
+                                </div>
+                                <div class="mt-auto">
+                                    <button v-on:click="addItemToCart(item)"
+                                        class="btn btn-primary btn-sm w-100 font-weight-bold mt-2"
+                                        v-bind:disabled="!item.is_available">
+                                        {{ item.is_available ? 'Add to Cart' : 'Sold Out' }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 text-center text-muted py-3" v-if="filteredBeverageItems.length === 0">
+                            No beverage choices matching this category are online today.
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card cart-sticky shadow-sm p-3 bg-white">
+                        <h4 class="font-weight-bold text-secondary mb-3 border-bottom pb-2">Your cart</h4>
+
+                        <div v-if="shoppingCart.length > 0">
+                            <div class="mb-3 border-bottom pb-2" v-for="(cartItem, index) in shoppingCart"
+                                v-bind:key="cartItem.menu_id">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="font-weight-bold text-dark">{{ cartItem.item_name }}</span>
+                                    <span class="text-muted font-weight-bold text-sm">RM {{ (cartItem.price *
+                                        cartItem.quantity).toFixed(2) }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary btn-sm px-2 font-weight-bold"
+                                            v-on:click="updateItemQuantity(index, -1)">-</button>
+                                        <span class="btn btn-light disabled btn-sm font-weight-bold text-dark px-3">{{
+                                            cartItem.quantity }}</span>
+                                        <button class="btn btn-outline-secondary btn-sm px-2 font-weight-bold"
+                                            v-on:click="updateItemQuantity(index, 1)">+</button>
+                                    </div>
+                                    <button class="btn btn-link btn-sm text-danger font-weight-bold p-0"
+                                        v-on:click="removeItemFromCart(index)">Remove</button>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mt-4 mb-4">
+                                <h5 class="font-weight-bold text-secondary">Total Bill:</h5>
+                                <h4 class="font-weight-bold text-success">RM {{ calculatedCartTotal.toFixed(2) }}</h4>
+                            </div>
+
+                            <button v-on:click="executeCheckoutRoutine"
+                                class="btn btn-success btn-lg w-100 font-weight-bold shadow-sm"
+                                v-bind:disabled="isSubmittingOrder">
+                                <span v-if="isSubmittingOrder" class="spinner-border spinner-border-sm mr-2 me-2"
+                                    role="status" aria-hidden="true"></span>
+                                {{ isSubmittingOrder ? 'Processing Secure Checkout...' : 'Confirm Place Order' }}
+                            </button>
+                        </div>
+
+                        <div class="text-center py-5 text-muted" v-else>
+                            <p class="mb-0 font-weight-bold">Your cart is completely empty.</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 
-<script>
-    const customerAppInstance = Vue.createApp({
-        data() {
-            return {
-                username: '',
-                customerId: null,
-                stallsCollection: [],
-                menusCollection: [],
-                shoppingCart: [],
-                selectedStallId: null,
-                statusMessage: null,
-                isError: false,
-                isSubmittingOrder: false
-            };
-        },
-        computed: {
-            // Filter catalog arrays down strictly to matching active stall selections and category mappings
-            filteredFoodItems() {
-                return this.menusCollection.filter(item => {
-                    const matchesStall = this.selectedStallId === null || item.stall_id === this.selectedStallId;
-                    return matchesStall && item.category === 'food';
-                });
+    <script>
+        const customerAppInstance = Vue.createApp({
+            data() {
+                return {
+                    username: '',
+                    customerId: null,
+                    stallsCollection: [],
+                    menusCollection: [],
+                    shoppingCart: [],
+                    selectedStallId: null,
+                    statusMessage: null,
+                    isError: false,
+                    isSubmittingOrder: false
+                };
             },
-            filteredBeverageItems() {
-                return this.menusCollection.filter(item => {
-                    const matchesStall = this.selectedStallId === null || item.stall_id === this.selectedStallId;
-                    return matchesStall && item.category === 'beverage';
-                });
-            },
-            // Computed aggregate mechanism calculating real-time transactional summary values
-            calculatedCartTotal() {
-                return this.shoppingCart.reduce((accumulatedSum, currentCartItem) => {
-                    return accumulatedSum + (currentCartItem.price * currentCartItem.quantity);
-                }, 0);
-            }
-        },
-        mounted() {
-            // Read authentication state keys directly from active localized identity browser cookies
-            this.username = this.getCookieValueByName('username') || 'Valued Guest';
-            this.customerId = this.getCookieValueByName('user_id');
-            
-            // Execute automated asynchronous retrieval cycles to query back-end ecosystem assets
-            this.fetchStallsData();
-            this.fetchMenusData();
-        },
-        methods: {
-            // Helper parsing routine extracting key identity tags from browser state memory pools
-            getCookieValueByName(cookieName) {
-                const match = document.cookie.match(new RegExp('(^| )' + cookieName + '=([^;]+)'));
-                return match ? decodeURIComponent(match[2]) : null;
-            },
-            // Asynchronous retrieval handlers pulling real-time relational information records
-            async fetchStallsData() {
-                try {
-                    const res = await fetch('/cpad-project/DNF-3/api/stalls');
-                    const jsonResult = await res.json();
-                    if (jsonResult.success) {
-                        this.stallsCollection = jsonResult.data;
-                    }
-                } catch (err) {
-                    console.error('Failed to load vendor stall listings:', err);
+            computed: {
+                // Filter catalog arrays down strictly to matching active stall selections and category mappings
+                filteredFoodItems() {
+                    return this.menusCollection.filter(item => {
+                        const matchesStall = this.selectedStallId === null || item.stall_id === this.selectedStallId;
+                        return matchesStall && item.category === 'food';
+                    });
+                },
+                filteredBeverageItems() {
+                    return this.menusCollection.filter(item => {
+                        const matchesStall = this.selectedStallId === null || item.stall_id === this.selectedStallId;
+                        return matchesStall && item.category === 'beverage';
+                    });
+                },
+                // Computed aggregate mechanism calculating real-time transactional summary values
+                calculatedCartTotal() {
+                    return this.shoppingCart.reduce((accumulatedSum, currentCartItem) => {
+                        return accumulatedSum + (currentCartItem.price * currentCartItem.quantity);
+                    }, 0);
                 }
             },
-            async fetchMenusData() {
-                try {
-                    let url = '/cpad-project/DNF-3/api/menus';
-                    if (this.selectedStallId) {
-                        url += `?stall_id=${this.selectedStallId}`;
-                    }
-                    const res = await fetch(url);
-                    const jsonResult = await res.json();
-                    if (jsonResult.success) {
-                        this.menusCollection = jsonResult.data;
-                    }
-                } catch (err) {
-                    console.error('Failed to load menu items catalog:', err);
-                }
-            },
-            // Interactive UI event handlers mutating active filtering models
-            filterByStall(stallId) {
-                this.selectedStallId = stallId;
+            mounted() {
+                // Read authentication state keys directly from active localized identity browser cookies
+                this.username = this.getCookieValueByName('username') || 'Valued Guest';
+                this.customerId = this.getCookieValueByName('user_id');
+
+                // Execute automated asynchronous retrieval cycles to query back-end ecosystem assets
+                this.fetchStallsData();
                 this.fetchMenusData();
             },
-            // Shopping cart accumulation and configuration mutate mutations
-            addItemToCart(menuItem) {
-                this.statusMessage = null;
-                const existingIndex = this.shoppingCart.findIndex(c => c.menu_id === menuItem.menu_id);
-                if (existingIndex !== -1) {
-                    this.shoppingCart[existingIndex].quantity += 1;
-                } else {
-                    this.shoppingCart.push({
-                        menu_id: menuItem.menu_id,
-                        item_name: menuItem.item_name,
-                        price: parseFloat(menuItem.price),
-                        quantity: 1
-                    });
-                }
-            },
-            updateItemQuantity(index, mutationValue) {
-                const cartItem = this.shoppingCart[index];
-                cartItem.quantity += mutationValue;
-                if (cartItem.quantity <= 0) {
-                    this.removeItemFromCart(index);
-                }
-            },
-            removeItemFromCart(index) {
-                this.shoppingCart.splice(index, 1);
-            },
-            // Consolidated transaction transaction submission router execution
-            async executeCheckoutRoutine() {
-                if (!this.customerId) {
-                    this.isError = true;
-                    this.statusMessage = 'Authorization Exception: Invalid customer identifier token keys detected. Please log in again.';
-                    return;
-                }
-                
-                this.statusMessage = null;
-                this.isSubmittingOrder = true;
-
-                const orderPayload = {
-                    customer_id: parseInt(this.customerId),
-                    total_price: this.calculatedCartTotal,
-                    items: this.shoppingCart
-                };
-
-                try {
-                    const response = await fetch('/cpad-project/DNF-3/orders/create', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(orderPayload)
-                    });
-
-                    const outcomeData = await response.json();
-
-                    if (response.ok && outcomeData.success) {
-                        this.isError = false;
-                        this.statusMessage = `Success! Order ticket #${outcomeData.order_id} generated. Navigating to transaction overview tracking...`;
-                        this.shoppingCart = [];
-                        
-                        // Re-route the customer to see their historical states list page tracking screen
-                        setTimeout(() => {
-                            window.location.href = 'customer_orders.html';
-                        }, 1500);
-                    } else {
-                        this.isError = true;
-                        this.statusMessage = outcomeData.error || 'Transaction refused by server controller processing safeguards.';
+            methods: {
+                // Helper parsing routine extracting key identity tags from browser state memory pools
+                getCookieValueByName(cookieName) {
+                    const match = document.cookie.match(new RegExp('(^| )' + cookieName + '=([^;]+)'));
+                    return match ? decodeURIComponent(match[2]) : null;
+                },
+                // Asynchronous retrieval handlers pulling real-time relational information records
+                async fetchStallsData() {
+                    try {
+                        const res = await fetch('/cpad-project/DNF-3/api/stalls');
+                        const jsonResult = await res.json();
+                        if (jsonResult.success) {
+                            this.stallsCollection = jsonResult.data;
+                        }
+                    } catch (err) {
+                        console.error('Failed to load vendor stall listings:', err);
                     }
-                } catch (netErr) {
-                    this.isError = true;
-                    this.statusMessage = 'System Exception: Network communication channel block dropped during order serialization runtime.';
-                    console.error(netErr);
-                } finally {
-                    this.isSubmittingOrder = false;
-                }
-            },
-            handleLogout() {
-                // Clear state identity variables from the running browser context
-                document.cookie = "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                document.cookie = "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                document.cookie = "user_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                window.location.href = 'login.html';
-            }
-        }
-    });
+                },
+                async fetchMenusData() {
+                    try {
+                        let url = '/cpad-project/DNF-3/api/menus';
+                        if (this.selectedStallId) {
+                            url += `?stall_id=${this.selectedStallId}`;
+                        }
+                        const res = await fetch(url);
+                        const jsonResult = await res.json();
+                        if (jsonResult.success) {
+                            this.menusCollection = jsonResult.data;
+                        }
+                    } catch (err) {
+                        console.error('Failed to load menu items catalog:', err);
+                    }
+                },
+                // Interactive UI event handlers mutating active filtering models
+                filterByStall(stallId) {
+                    this.selectedStallId = stallId;
+                    this.fetchMenusData();
+                },
+                // Shopping cart accumulation and configuration mutate mutations
+                addItemToCart(menuItem) {
+                    this.statusMessage = null;
+                    const existingIndex = this.shoppingCart.findIndex(c => c.menu_id === menuItem.menu_id);
+                    if (existingIndex !== -1) {
+                        this.shoppingCart[existingIndex].quantity += 1;
+                    } else {
+                        this.shoppingCart.push({
+                            menu_id: menuItem.menu_id,
+                            item_name: menuItem.item_name,
+                            price: parseFloat(menuItem.price),
+                            quantity: 1
+                        });
+                    }
+                },
+                updateItemQuantity(index, mutationValue) {
+                    const cartItem = this.shoppingCart[index];
+                    cartItem.quantity += mutationValue;
+                    if (cartItem.quantity <= 0) {
+                        this.removeItemFromCart(index);
+                    }
+                },
+                removeItemFromCart(index) {
+                    this.shoppingCart.splice(index, 1);
+                },
+                // Consolidated transaction transaction submission router execution
+                async executeCheckoutRoutine() {
+                    if (!this.customerId) {
+                        this.isError = true;
+                        this.statusMessage = 'Authorization Exception: Invalid customer identifier token keys detected. Please log in again.';
+                        return;
+                    }
 
-    customerAppInstance.mount('#customerApp');
-</script>
+                    this.statusMessage = null;
+                    this.isSubmittingOrder = true;
+
+                    const orderPayload = {
+                        customer_id: parseInt(this.customerId),
+                        total_price: this.calculatedCartTotal,
+                        items: this.shoppingCart
+                    };
+
+                    try {
+                        const response = await fetch('/cpad-project/DNF-3/orders/create', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(orderPayload)
+                        });
+
+                        const outcomeData = await response.json();
+
+                        if (response.ok && outcomeData.success) {
+                            this.isError = false;
+                            this.statusMessage = `Success! Order ticket #${outcomeData.order_id} generated. Navigating to transaction overview tracking...`;
+                            this.shoppingCart = [];
+
+                            // Re-route the customer to see their historical states list page tracking screen
+                            setTimeout(() => {
+                                window.location.href = 'customer_orders.html';
+                            }, 1500);
+                        } else {
+                            this.isError = true;
+                            this.statusMessage = outcomeData.error || 'Transaction refused by server controller processing safeguards.';
+                        }
+                    } catch (netErr) {
+                        this.isError = true;
+                        this.statusMessage = 'System Exception: Network communication channel block dropped during order serialization runtime.';
+                        console.error(netErr);
+                    } finally {
+                        this.isSubmittingOrder = false;
+                    }
+                },
+                handleLogout() {
+                    // Clear state identity variables from the running browser context
+                    document.cookie = "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    document.cookie = "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    document.cookie = "user_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    window.location.href = 'login.html';
+                }
+            }
+        });
+
+        customerAppInstance.mount('#customerApp');
+    </script>
 
 </body>
+
 </html>

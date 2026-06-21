@@ -58,15 +58,19 @@ $app->post('/api/login', function (Request $request, Response $response) {
         $user = $stmt->fetch();
         
         if ($user) {
-            $payload['success'] = true;
-            $payload['role'] = $user['role'];
-            $payload['user_id'] = $user['user_id'];
-            $payload['username'] = $user['username'];
-            
-            // Send cookies to the browser to maintain the user login session state
-            setcookie('username', $user['username'], time() + 3600, '/');
-            setcookie('role', $user['role'], time() + 3600, '/');
-            setcookie('user_id', $user['user_id'], time() + 3600, '/');
+            if ($user['role'] === 'vendor' && !$user['is_verified']) {
+                $payload['error'] = 'Your vendor account is pending administrator verification.';
+            } else {
+                $payload['success'] = true;
+                $payload['role'] = $user['role'];
+                $payload['user_id'] = $user['user_id'];
+                $payload['username'] = $user['username'];
+                
+                // Send cookies to the browser to maintain the user login session state
+                setcookie('username', $user['username'], time() + 3600, '/');
+                setcookie('role', $user['role'], time() + 3600, '/');
+                setcookie('user_id', $user['user_id'], time() + 3600, '/');
+            }
         } else {
             $payload['error'] = 'Invalid username or password.';
         }
@@ -86,9 +90,9 @@ $app->get('/api/stalls', function (Request $request, Response $response) {
     $payload = ['success' => true, 'data' => []];
     
     try {
-        $stmt = $pdo->prepare("SELECT * FROM stalls ORDER BY stall_id ASC");
+        $stmt = $pdo->prepare("SELECT s.* FROM stalls s JOIN users u ON s.vendor_id = u.user_id WHERE u.is_verified = 1 ORDER BY s.stall_id ASC");
         $stmt->execute();
-        $payload['data'] = $stmt->fetchAll();
+        $payload['data'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $ex) {
         $payload['success'] = false;
         $payload['error'] = $ex->getMessage();
@@ -140,7 +144,13 @@ $app->get('/api/menus', function (Request $request, Response $response) {
             $stmt = $pdo->prepare("SELECT * FROM menus ORDER BY item_name ASC");
             $stmt->execute();
         }
-        $payload['data'] = $stmt->fetchAll();
+        $menus = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($menus as &$menu) {
+            if (isset($menu['is_available'])) {
+                $menu['is_available'] = (bool)$menu['is_available'];
+            }
+        }
+        $payload['data'] = $menus;
     } catch (PDOException $ex) {
         $payload['success'] = false;
         $payload['error'] = $ex->getMessage();
@@ -223,11 +233,53 @@ $app->get('/api/orders', function (Request $request, Response $response) {
             $stmt = $pdo->prepare("SELECT * FROM orders WHERE customer_id = :customer_id ORDER BY order_date DESC");
             $stmt->execute([':customer_id' => $customer_id]);
         } else {
-            // Vendor side: check all current incoming customer order ticket items across the food court
-            $stmt = $pdo->prepare("SELECT o.*, u.username as customer_name FROM orders o JOIN users u ON o.customer_id = u.user_id ORDER BY o.order_date DESC");
-            $stmt->execute();
+            // Check if the caller is a vendor
+            $cookieParams = $request->getCookieParams();
+            $role = isset($cookieParams['role']) ? $cookieParams['role'] : null;
+            $user_id = isset($cookieParams['user_id']) ? $cookieParams['user_id'] : null;
+            
+            if ($role === 'vendor') {
+                // Vendor side: Find vendor's stall_id
+                $stmtStall = $pdo->prepare("SELECT stall_id FROM stalls WHERE vendor_id = :vendor_id");
+                $stmtStall->execute([':vendor_id' => $user_id]);
+                $stall = $stmtStall->fetch();
+                
+                if ($stall) {
+                    // Query only the orders containing menu items from this vendor's stall
+                    // We sum the subtotal of the items belonging to this vendor's stall to show the vendor their portion of the order total.
+                    $stmt = $pdo->prepare("
+                        SELECT o.order_id, o.customer_id, o.order_date, o.status, SUM(oi.subtotal) as total_price, u.username as customer_name 
+                        FROM orders o 
+                        JOIN users u ON o.customer_id = u.user_id 
+                        JOIN order_items oi ON o.order_id = oi.order_id 
+                        JOIN menus m ON oi.menu_id = m.menu_id 
+                        WHERE m.stall_id = :stall_id 
+                        GROUP BY o.order_id, o.customer_id, o.order_date, o.status, u.username 
+                        ORDER BY o.order_date DESC
+                    ");
+                    $stmt->execute([':stall_id' => $stall['stall_id']]);
+                    $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    $total_orders = count($orders);
+                    for ($i = 0; $i < $total_orders; $i++) {
+                        $orders[$i]['stall_order_id'] = $total_orders - $i;
+                    }
+                    $payload['data'] = $orders;
+                    $response->getBody()->write(json_encode($payload));
+                    return $response->withHeader('Content-Type', 'application/json');
+                } else {
+                    // If vendor has no stall, return an empty array gracefully
+                    $payload['data'] = [];
+                    $response->getBody()->write(json_encode($payload));
+                    return $response->withHeader('Content-Type', 'application/json');
+                }
+            } else {
+                // Default / Admin side: check all current incoming customer order ticket items across the food court
+                $stmt = $pdo->prepare("SELECT o.*, u.username as customer_name FROM orders o JOIN users u ON o.customer_id = u.user_id ORDER BY o.order_date DESC");
+                $stmt->execute();
+            }
         }
-        $payload['data'] = $stmt->fetchAll();
+        $payload['data'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $ex) {
         $payload['success'] = false;
         $payload['error'] = $ex->getMessage();
@@ -252,7 +304,42 @@ $app->put('/api/orders/{id}/status', function (Request $request, Response $respo
         return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
     }
     
+    // Auth & Permission checks
+    $cookieParams = $request->getCookieParams();
+    $role = isset($cookieParams['role']) ? $cookieParams['role'] : null;
+    $user_id = isset($cookieParams['user_id']) ? $cookieParams['user_id'] : null;
+    
     try {
+        if ($role === 'vendor') {
+            $vendor_stall_id = -1;
+            if ($user_id) {
+                $stmtStall = $pdo->prepare("SELECT stall_id FROM stalls WHERE vendor_id = :vendor_id");
+                $stmtStall->execute([':vendor_id' => $user_id]);
+                $stall = $stmtStall->fetch();
+                if ($stall) {
+                    $vendor_stall_id = $stall['stall_id'];
+                }
+            }
+            
+            // Check if the order contains at least one item from this vendor's stall
+            $stmtCheck = $pdo->prepare("
+                SELECT COUNT(*) 
+                FROM order_items oi 
+                JOIN menus m ON oi.menu_id = m.menu_id 
+                WHERE oi.order_id = :order_id AND m.stall_id = :stall_id
+            ");
+            $stmtCheck->execute([
+                ':order_id' => $order_id,
+                ':stall_id' => $vendor_stall_id
+            ]);
+            
+            if ($stmtCheck->fetchColumn() == 0) {
+                $payload['error'] = 'Access Denied: You do not have permission to update this order.';
+                $response->getBody()->write(json_encode($payload));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+            }
+        }
+        
         // Securely progress the order lifecycle staging parameters (Received -> Preparing -> Ready)
         $stmt = $pdo->prepare("UPDATE orders SET status = :status WHERE order_id = :order_id");
         $stmt->execute([
@@ -445,6 +532,214 @@ $app->put('/api/menus/{id}', function (Request $request, Response $response, $ar
         $payload['error'] = $ex->getMessage();
     }
     
+    $response->getBody()->write(json_encode($payload));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
+// ==========================================
+// 10. User Registration API (POST Method)
+// ==========================================
+$app->post('/api/register', function (Request $request, Response $response) {
+    require __DIR__ . '/libs/db_connect_PDO_SLIM.php';
+    $data = json_decode($request->getBody()->getContents(), true);
+    $payload = ['success' => false, 'error' => null];
+
+    if (empty($data['username']) || empty($data['password']) || empty($data['email']) || empty($data['role'])) {
+        $payload['error'] = 'All fields (username, password, email, role) are required.';
+        $response->getBody()->write(json_encode($payload));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    $username = trim($data['username']);
+    $password = $data['password'];
+    $email = trim($data['email']);
+    $role = trim($data['role']);
+    $stall_name = isset($data['stall_name']) ? trim($data['stall_name']) : '';
+
+    if ($role !== 'customer' && $role !== 'vendor') {
+        $payload['error'] = 'Invalid role selected. Only Customer or Vendor roles are permitted.';
+        $response->getBody()->write(json_encode($payload));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    if ($role === 'vendor' && empty($stall_name)) {
+        $payload['error'] = 'Stall Name is required for vendor accounts.';
+        $response->getBody()->write(json_encode($payload));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        // Check if username already exists
+        $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = :username");
+        $stmtCheck->execute([':username' => $username]);
+        if ($stmtCheck->fetchColumn() > 0) {
+            $pdo->rollBack();
+            $payload['error'] = 'Username is already taken.';
+            $response->getBody()->write(json_encode($payload));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        // Customer needs no verification (is_verified = 1), vendor needs verification (is_verified = 0)
+        $is_verified = ($role === 'customer') ? 1 : 0;
+
+        $stmtInsert = $pdo->prepare("INSERT INTO users (username, password, email, role, is_verified) VALUES (:username, :password, :email, :role, :is_verified)");
+        $stmtInsert->execute([
+            ':username' => $username,
+            ':password' => $password,
+            ':email' => $email,
+            ':role' => $role,
+            ':is_verified' => $is_verified
+        ]);
+
+        $user_id = $pdo->lastInsertId();
+
+        if ($role === 'vendor') {
+            $stmtInsertStall = $pdo->prepare("INSERT INTO stalls (vendor_id, stall_name) VALUES (:vendor_id, :stall_name)");
+            $stmtInsertStall->execute([
+                ':vendor_id' => $user_id,
+                ':stall_name' => $stall_name
+            ]);
+        }
+
+        $pdo->commit();
+        $payload['success'] = true;
+        $payload['message'] = ($role === 'customer') 
+            ? 'Account registered successfully. You can now log in.' 
+            : 'Vendor account registered successfully. Pending admin verification.';
+
+    } catch (PDOException $ex) {
+        $pdo->rollBack();
+        $payload['error'] = 'Database error: ' . $ex->getMessage();
+    }
+
+    $response->getBody()->write(json_encode($payload));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
+// ==========================================
+// 11. Admin Dashboard Stats & Vendor List API (GET Method)
+// ==========================================
+$app->get('/api/admin/dashboard-stats', function (Request $request, Response $response) {
+    require __DIR__ . '/libs/db_connect_PDO_SLIM.php';
+    $payload = ['success' => false, 'error' => null, 'stats' => [], 'vendors' => []];
+
+    // Auth & Permission checks
+    $cookieParams = $request->getCookieParams();
+    $role = isset($cookieParams['role']) ? $cookieParams['role'] : null;
+    
+    if ($role !== 'admin') {
+        $payload['error'] = 'Access Denied: Admin privileges required.';
+        $response->getBody()->write(json_encode($payload));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
+
+    try {
+        // Query metrics
+        $stmtUsersCount = $pdo->query("SELECT COUNT(*) FROM users");
+        $totalUsers = $stmtUsersCount->fetchColumn();
+
+        $stmtStallsCount = $pdo->query("SELECT COUNT(*) FROM stalls s JOIN users u ON s.vendor_id = u.user_id WHERE u.is_verified = 1");
+        $totalStalls = $stmtStallsCount->fetchColumn();
+
+        $stmtPendingVendors = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'vendor' AND is_verified = 0");
+        $pendingVendors = $stmtPendingVendors->fetchColumn();
+
+        $payload['stats'] = [
+            'total_users' => $totalUsers,
+            'total_stalls' => $totalStalls,
+            'pending_vendors' => $pendingVendors
+        ];
+
+        // Fetch vendors list with stall details if they have one
+        $stmtVendors = $pdo->prepare("
+            SELECT u.user_id, u.username, u.email, u.is_verified, s.stall_name 
+            FROM users u 
+            LEFT JOIN stalls s ON u.user_id = s.vendor_id 
+            WHERE u.role = 'vendor' 
+            ORDER BY u.user_id DESC
+        ");
+        $stmtVendors->execute();
+        $vendors = $stmtVendors->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($vendors as &$vendor) {
+            if (isset($vendor['is_verified'])) {
+                $vendor['is_verified'] = (bool)$vendor['is_verified'];
+            }
+        }
+        $payload['vendors'] = $vendors;
+        $payload['success'] = true;
+
+    } catch (PDOException $ex) {
+        $payload['error'] = 'Database error: ' . $ex->getMessage();
+    }
+
+    $response->getBody()->write(json_encode($payload));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
+// ==========================================
+// 12. Admin Verify Vendor API (POST Method)
+// ==========================================
+$app->post('/api/admin/vendors/{id}/verify', function (Request $request, Response $response, $args) {
+    require __DIR__ . '/libs/db_connect_PDO_SLIM.php';
+    $vendor_id = $args['id'];
+    $payload = ['success' => false, 'error' => null];
+
+    // Auth & Permission checks
+    $cookieParams = $request->getCookieParams();
+    $role = isset($cookieParams['role']) ? $cookieParams['role'] : null;
+    
+    if ($role !== 'admin') {
+        $payload['error'] = 'Access Denied: Admin privileges required.';
+        $response->getBody()->write(json_encode($payload));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        // 1. Verify user exists and is a vendor
+        $stmtCheck = $pdo->prepare("SELECT username, role, is_verified FROM users WHERE user_id = :user_id");
+        $stmtCheck->execute([':user_id' => $vendor_id]);
+        $vendorUser = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+
+        if (!$vendorUser || $vendorUser['role'] !== 'vendor') {
+            $pdo->rollBack();
+            $payload['error'] = 'User not found or is not a vendor.';
+            $response->getBody()->write(json_encode($payload));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        // 2. Set is_verified = 1
+        $stmtUpdate = $pdo->prepare("UPDATE users SET is_verified = 1 WHERE user_id = :user_id");
+        $stmtUpdate->execute([':user_id' => $vendor_id]);
+
+        // 3. Check if a stall already exists for this vendor
+        $stmtStallCheck = $pdo->prepare("SELECT COUNT(*) FROM stalls WHERE vendor_id = :vendor_id");
+        $stmtStallCheck->execute([':vendor_id' => $vendor_id]);
+        $hasStall = $stmtStallCheck->fetchColumn() > 0;
+
+        if (!$hasStall) {
+            // Auto-create a default stall for them
+            $stallName = $vendorUser['username'] . "'s Stall";
+            
+            $stmtInsertStall = $pdo->prepare("INSERT INTO stalls (vendor_id, stall_name) VALUES (:vendor_id, :stall_name)");
+            $stmtInsertStall->execute([
+                ':vendor_id' => $vendor_id,
+                ':stall_name' => $stallName
+            ]);
+        }
+
+        $pdo->commit();
+        $payload['success'] = true;
+        $payload['message'] = 'Vendor successfully verified and default stall provisioned.';
+
+    } catch (PDOException $ex) {
+        $pdo->rollBack();
+        $payload['error'] = 'Database error during verification: ' . $ex->getMessage();
+    }
+
     $response->getBody()->write(json_encode($payload));
     return $response->withHeader('Content-Type', 'application/json');
 });
