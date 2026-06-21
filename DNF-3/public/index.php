@@ -175,41 +175,82 @@ $app->post('/orders/create', function (Request $request, Response $response) {
     }
     
     try {
-        // Begin database transaction to ensure both master order and item details write successfully together
+        // Begin database transaction to ensure all split orders write successfully together
         $pdo->beginTransaction();
         
-        // Step 4.1: Insert into the orders master table first, initializing the status to 'Received'
-        $stmtOrder = $pdo->prepare("INSERT INTO orders (customer_id, total_price, status) VALUES (:customer_id, :total_price, 'Received')");
-        $stmtOrder->execute([
-            ':customer_id' => $data['customer_id'],
-            ':total_price' => $data['total_price']
-        ]);
-        
-        $order_id = $pdo->lastInsertId(); // Catch the auto-incremented primary key of the new order record
-        
-        // Step 4.2: Loop and batch insert the digital shopping cart items into the order_items junction table
-        $stmtItem = $pdo->prepare("INSERT INTO order_items (item_id, order_id, menu_id, quantity, subtotal) VALUES (:item_id, :order_id, :menu_id, :quantity, :subtotal)");
-        
-        // Generate sequential item identifier
-        $stmtCount = $pdo->query("SELECT IFNULL(MAX(item_id), 0) FROM order_items");
-        $itemIdCounter = $stmtCount->fetchColumn() + 1;
-        
+        // Step 4.1: Fetch stall mapping for the requested menu items for security and classification
+        $menuIds = array_map('intval', array_column($data['items'], 'menu_id'));
+        if (empty($menuIds)) {
+            throw new Exception("No valid menu items specified in order request.");
+        }
+        $placeholders = implode(',', array_fill(0, count($menuIds), '?'));
+        $stmtMenu = $pdo->prepare("SELECT menu_id, stall_id, price FROM menus WHERE menu_id IN ($placeholders)");
+        $stmtMenu->execute($menuIds);
+        $menusDb = $stmtMenu->fetchAll(PDO::FETCH_ASSOC);
+
+        $menuMap = [];
+        foreach ($menusDb as $m) {
+            $menuMap[(int)$m['menu_id']] = $m;
+        }
+
+        // Step 4.2: Group order items by their respective stall_id
+        $itemsByStall = [];
         foreach ($data['items'] as $item) {
-            $stmtItem->execute([
-                ':item_id'   => $itemIdCounter++,
-                ':order_id'  => $order_id,
-                ':menu_id'   => $item['menu_id'],
-                ':quantity'  => $item['quantity'],
-                ':subtotal'  => $item['price'] * $item['quantity']
+            $menuId = (int)$item['menu_id'];
+            if (!isset($menuMap[$menuId])) {
+                throw new Exception("Menu item #{$menuId} not found in database catalog.");
+            }
+            $stallId = (int)$menuMap[$menuId]['stall_id'];
+            $price = (float)$menuMap[$menuId]['price'];
+            
+            $item['price'] = $price; // Overwrite client input with database price for security
+            $itemsByStall[$stallId][] = $item;
+        }
+
+        $orderIdsCreated = [];
+        
+        // Prepare database statements
+        $stmtOrder = $pdo->prepare("INSERT INTO orders (customer_id, total_price, status) VALUES (:customer_id, :total_price, 'Received')");
+        $stmtItem = $pdo->prepare("INSERT INTO order_items (item_id, order_id, menu_id, quantity, subtotal) VALUES (:item_id, :order_id, :menu_id, :quantity, :subtotal)");
+
+        // Generate starting sequential item_id counter
+        $stmtCount = $pdo->query("SELECT IFNULL(MAX(item_id), 0) FROM order_items");
+        $itemIdCounter = (int)$stmtCount->fetchColumn() + 1;
+
+        // Step 4.3: Create separate orders per stall
+        foreach ($itemsByStall as $stallId => $stallItems) {
+            $stallTotal = 0.0;
+            foreach ($stallItems as $item) {
+                $stallTotal += (float)$item['price'] * (int)$item['quantity'];
+            }
+
+            $stmtOrder->execute([
+                ':customer_id' => (int)$data['customer_id'],
+                ':total_price' => $stallTotal
             ]);
+            $newOrderId = (int)$pdo->lastInsertId();
+            $orderIdsCreated[] = $newOrderId;
+
+            foreach ($stallItems as $item) {
+                $stmtItem->execute([
+                    ':item_id'   => $itemIdCounter++,
+                    ':order_id'  => $newOrderId,
+                    ':menu_id'   => (int)$item['menu_id'],
+                    ':quantity'  => (int)$item['quantity'],
+                    ':subtotal'  => (float)$item['price'] * (int)$item['quantity']
+                ]);
+            }
         }
         
         $pdo->commit(); // Commit database changes securely
         $payload['success'] = true;
-        $payload['order_id'] = $order_id;
+        $payload['order_ids'] = $orderIdsCreated;
+        $payload['order_id'] = !empty($orderIdsCreated) ? $orderIdsCreated[0] : null;
         
-    } catch (PDOException $ex) {
-        $pdo->rollBack(); // Roll back database mutations to preserve absolute data integrity if a failure happens
+    } catch (Exception $ex) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack(); // Roll back database mutations to preserve absolute data integrity if a failure happens
+        }
         $payload['error'] = 'Transaction failed: ' . $ex->getMessage();
     }
     
@@ -230,8 +271,20 @@ $app->get('/api/orders', function (Request $request, Response $response) {
     try {
         if ($customer_id) {
             // Customer side: query order history and real-time fulfillment status for a specific patron
-            $stmt = $pdo->prepare("SELECT * FROM orders WHERE customer_id = :customer_id ORDER BY order_date DESC");
+            $stmt = $pdo->prepare("SELECT * FROM orders WHERE customer_id = :customer_id ORDER BY order_date ASC");
             $stmt->execute([':customer_id' => $customer_id]);
+            $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $total_orders = count($orders);
+            for ($i = 0; $i < $total_orders; $i++) {
+                $orders[$i]['customer_order_id'] = $i + 1;
+            }
+            // Reverse so that newest orders appear first in presentation
+            $orders = array_reverse($orders);
+            
+            $payload['data'] = $orders;
+            $response->getBody()->write(json_encode($payload));
+            return $response->withHeader('Content-Type', 'application/json');
         } else {
             // Check if the caller is a vendor
             $cookieParams = $request->getCookieParams();
@@ -290,6 +343,84 @@ $app->get('/api/orders', function (Request $request, Response $response) {
 });
 
 // ==========================================
+// 5.1. Retrieve Order Items API (GET Method)
+// ==========================================
+$app->get('/api/orders/{id}/items', function (Request $request, Response $response, $args) {
+    require __DIR__ . '/libs/db_connect_PDO_SLIM.php';
+    $order_id = $args['id'];
+    $payload = ['success' => false, 'data' => [], 'error' => null];
+    
+    // Auth & Permission checks
+    $cookieParams = $request->getCookieParams();
+    $role = isset($cookieParams['role']) ? $cookieParams['role'] : null;
+    $user_id = isset($cookieParams['user_id']) ? $cookieParams['user_id'] : null;
+    
+    if (!$role || !$user_id) {
+        $payload['error'] = 'Access Denied: Authentication required.';
+        $response->getBody()->write(json_encode($payload));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+    }
+    
+    try {
+        if ($role === 'vendor') {
+            // Find vendor's stall_id
+            $stmtStall = $pdo->prepare("SELECT stall_id FROM stalls WHERE vendor_id = :vendor_id");
+            $stmtStall->execute([':vendor_id' => $user_id]);
+            $stall = $stmtStall->fetch();
+            
+            if (!$stall) {
+                $payload['error'] = 'Access Denied: Stall configuration error.';
+                $response->getBody()->write(json_encode($payload));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+            }
+            
+            // Query only items belonging to this vendor's stall in this order
+            $stmt = $pdo->prepare("
+                SELECT oi.quantity, oi.subtotal, m.item_name, m.price 
+                FROM order_items oi 
+                JOIN menus m ON oi.menu_id = m.menu_id 
+                WHERE oi.order_id = :order_id AND m.stall_id = :stall_id
+            ");
+            $stmt->execute([
+                ':order_id' => $order_id,
+                ':stall_id' => $stall['stall_id']
+            ]);
+        } else {
+            // Customer or Admin: query all items in this order
+            if ($role === 'customer') {
+                $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE order_id = :order_id AND customer_id = :customer_id");
+                $stmtCheck->execute([
+                    ':order_id' => $order_id,
+                    ':customer_id' => $user_id
+                ]);
+                if ($stmtCheck->fetchColumn() == 0) {
+                    $payload['error'] = 'Access Denied: You do not own this order.';
+                    $response->getBody()->write(json_encode($payload));
+                    return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+                }
+            }
+            
+            $stmt = $pdo->prepare("
+                SELECT oi.quantity, oi.subtotal, m.item_name, m.price, s.stall_name 
+                FROM order_items oi 
+                JOIN menus m ON oi.menu_id = m.menu_id 
+                JOIN stalls s ON m.stall_id = s.stall_id
+                WHERE oi.order_id = :order_id
+            ");
+            $stmt->execute([':order_id' => $order_id]);
+        }
+        
+        $payload['data'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $payload['success'] = true;
+    } catch (PDOException $ex) {
+        $payload['error'] = 'Database error: ' . $ex->getMessage();
+    }
+    
+    $response->getBody()->write(json_encode($payload));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
+// ==========================================
 // 6. Vendor Order Status Lifecycle Management API (PUT Method)
 // ==========================================
 $app->put('/api/orders/{id}/status', function (Request $request, Response $response, $args) {
@@ -340,7 +471,7 @@ $app->put('/api/orders/{id}/status', function (Request $request, Response $respo
             }
         }
         
-        // Securely progress the order lifecycle staging parameters (Received -> Preparing -> Ready)
+        // Securely progress the order lifecycle staging parameters (Received -> Preparing -> Ready -> Collected)
         $stmt = $pdo->prepare("UPDATE orders SET status = :status WHERE order_id = :order_id");
         $stmt->execute([
             ':status'   => $data['status'],

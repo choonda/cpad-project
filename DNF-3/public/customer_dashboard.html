@@ -71,6 +71,11 @@
         </nav>
 
         <div class="container mb-5">
+            <div v-if="hasReadyOrders" class="alert alert-success font-weight-bold shadow-sm d-flex justify-content-between align-items-center mb-4" role="alert">
+                <span>Your order is ready for pickup! Please head to the stall to collect it.</span>
+                <a href="customer_orders.html" class="btn btn-success btn-sm font-weight-bold text-white border-white">Track & View Orders</a>
+            </div>
+
             <div v-if="statusMessage"
                 v-bind:class="['alert', isError ? 'alert-danger' : 'alert-success', 'font-weight-bold']" role="alert">
                 {{ statusMessage }}
@@ -212,7 +217,9 @@
                     selectedStallId: null,
                     statusMessage: null,
                     isError: false,
-                    isSubmittingOrder: false
+                    isSubmittingOrder: false,
+                    hasReadyOrders: false,
+                    pollingIntervalId: null
                 };
             },
             computed: {
@@ -244,6 +251,17 @@
                 // Execute automated asynchronous retrieval cycles to query back-end ecosystem assets
                 this.fetchStallsData();
                 this.fetchMenusData();
+
+                // Start checking status of customer's active orders
+                this.checkActiveOrdersStatus();
+                this.pollingIntervalId = setInterval(() => {
+                    this.checkActiveOrdersStatus();
+                }, 5000);
+            },
+            unmounted() {
+                if (this.pollingIntervalId) {
+                    clearInterval(this.pollingIntervalId);
+                }
             },
             methods: {
                 // Helper parsing routine extracting key identity tags from browser state memory pools
@@ -338,7 +356,8 @@
 
                         if (response.ok && outcomeData.success) {
                             this.isError = false;
-                            this.statusMessage = `Success! Order ticket #${outcomeData.order_id} generated. Navigating to transaction overview tracking...`;
+                            const orderMsg = outcomeData.order_ids ? outcomeData.order_ids.map(id => '#' + id).join(', ') : '#' + outcomeData.order_id;
+                            this.statusMessage = `Success! Order ticket(s) ${orderMsg} generated. Navigating to transaction overview tracking...`;
                             this.shoppingCart = [];
 
                             // Re-route the customer to see their historical states list page tracking screen
@@ -355,6 +374,18 @@
                         console.error(netErr);
                     } finally {
                         this.isSubmittingOrder = false;
+                    }
+                },
+                async checkActiveOrdersStatus() {
+                    if (!this.customerId) return;
+                    try {
+                        const res = await fetch(`/cpad-project/DNF-3/api/orders?customer_id=${this.customerId}`);
+                        const jsonResult = await res.json();
+                        if (jsonResult.success) {
+                            this.hasReadyOrders = jsonResult.data.some(order => order.status === 'Ready');
+                        }
+                    } catch (err) {
+                        console.error('Failed to check active orders status:', err);
                     }
                 },
                 handleLogout() {

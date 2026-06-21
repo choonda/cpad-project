@@ -24,6 +24,12 @@
             border: none;
             border-radius: 10px;
             transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+
+        .order-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 .5rem 1rem rgba(0,0,0,.08) !important;
         }
 
         .status-badge {
@@ -49,6 +55,12 @@
             color: #1b5e20;
             border: 1px solid #c8e6c9;
         }
+
+        .status-collected {
+            background-color: #eceff1;
+            color: #37474f;
+            border: 1px solid #cfd8dc;
+        }
     </style>
 </head>
 
@@ -71,11 +83,8 @@
         </nav>
 
         <div class="container mb-5">
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="mb-4">
                 <h3 class="font-weight-bold text-dark mb-0">My Order History & Live Tracking</h3>
-                <span class="badge bg-white text-muted border p-2 font-weight-bold">
-                    Auto-refreshing status live every 5s
-                </span>
             </div>
 
             <div v-if="errorMessage" class="alert alert-danger font-weight-bold shadow-sm" role="alert">
@@ -85,11 +94,11 @@
             <div class="row">
                 <div class="col-12" v-if="ordersHistory.length > 0">
                     <div class="card order-card shadow-sm p-4 mb-3 bg-white" v-for="order in ordersHistory"
-                        v-bind:key="order.order_id">
+                        v-bind:key="order.order_id" v-on:click="toggleOrderDetails(order)">
                         <div class="row align-items-center">
 
                             <div class="col-md-3 mb-2 mb-md-0">
-                                <h5 class="font-weight-bold text-secondary mb-1">Order #{{ order.order_id }}</h5>
+                                <h5 class="font-weight-bold text-secondary mb-1">Order #{{ order.customer_order_id || order.order_id }}</h5>
                                 <small class="text-muted d-block font-weight-bold">Placed on:</small>
                                 <small class="text-muted">{{ order.order_date }}</small>
                             </div>
@@ -119,8 +128,42 @@
                                 <div v-else-if="order.status === 'Ready'" class="text-success font-weight-bold">
                                     Ready for Pickup! Please claim at stall.
                                 </div>
+                                <div v-else-if="order.status === 'Collected'" class="text-secondary font-weight-bold">
+                                    Collected! Thank you for dining with us.
+                                </div>
                             </div>
 
+                        </div>
+
+                        <!-- Expandable Details Area -->
+                        <div v-if="order.isExpanded" class="mt-3 pt-3 border-top" v-on:click.stop>
+                            <h6 class="font-weight-bold text-secondary mb-2">Order Items Details:</h6>
+                            <div v-if="order.isLoadingItems" class="text-muted small py-2">
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span> Loading items...
+                            </div>
+                            <div v-else-if="order.itemsList && order.itemsList.length > 0">
+                                <table class="table table-sm table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr class="text-muted small">
+                                            <th>Item Name</th>
+                                            <th>Stall</th>
+                                            <th class="text-center">Qty</th>
+                                            <th class="text-end">Price</th>
+                                            <th class="text-end">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="item in order.itemsList" class="small">
+                                            <td class="font-weight-bold text-dark">{{ item.item_name }}</td>
+                                            <td><span class="badge bg-light text-secondary border font-weight-bold">{{ item.stall_name }}</span></td>
+                                            <td class="text-center font-weight-bold">{{ item.quantity }}</td>
+                                            <td class="text-end">RM {{ parseFloat(item.price).toFixed(2) }}</td>
+                                            <td class="text-end font-weight-bold text-success">RM {{ parseFloat(item.subtotal).toFixed(2) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div v-else class="text-muted small py-2">No items found for this order.</div>
                         </div>
                     </div>
                 </div>
@@ -190,7 +233,15 @@
                         const outcomeData = await response.json();
 
                         if (outcomeData.success) {
-                            this.ordersHistory = outcomeData.data;
+                            this.ordersHistory = outcomeData.data.map(order => {
+                                const existing = this.ordersHistory.find(o => o.order_id === order.order_id);
+                                return {
+                                    ...order,
+                                    isExpanded: existing ? existing.isExpanded : false,
+                                    itemsList: existing ? existing.itemsList : [],
+                                    isLoadingItems: existing ? existing.isLoadingItems : false
+                                };
+                            });
                         } else {
                             this.errorMessage = outcomeData.error || 'Failed to update live transaction pipelines tracking maps.';
                         }
@@ -199,11 +250,33 @@
                         // Do not flood screen with raw network anomalies during background auto-refresh cycles
                     }
                 },
+                async toggleOrderDetails(order) {
+                    if (!order.isExpanded) {
+                        if (order.itemsList.length === 0) {
+                            order.isLoadingItems = true;
+                            try {
+                                const response = await fetch(`/cpad-project/DNF-3/api/orders/${order.order_id}/items`);
+                                const result = await response.json();
+                                if (result.success) {
+                                    order.itemsList = result.data;
+                                }
+                            } catch (err) {
+                                console.error('Failed to fetch order items:', err);
+                            } finally {
+                                order.isLoadingItems = false;
+                            }
+                        }
+                        order.isExpanded = true;
+                    } else {
+                        order.isExpanded = false;
+                    }
+                },
                 // Map table status enum tokens directly to contextual CSS styling parameters
                 getStatusClass(statusValue) {
                     if (statusValue === 'Received') return 'status-received';
                     if (statusValue === 'Preparing') return 'status-preparing';
                     if (statusValue === 'Ready') return 'status-ready';
+                    if (statusValue === 'Collected') return 'status-collected';
                     return 'bg-secondary text-white';
                 },
                 handleLogout() {
