@@ -57,6 +57,12 @@
 
   <!-- Main content section -->
   <div class="container py-3">
+    <!-- Ready Order Notification Banner -->
+    <div v-if="hasReadyOrders && !viewCheckOrderPage" class="alert alert-success font-weight-bold shadow-sm d-flex justify-content-between align-items-center mb-3" role="alert" style="font-size: 0.9rem;">
+      <span>Your order is ready for pickup! Please head to the stall to collect it.</span>
+      <button class="btn btn-success btn-sm font-weight-bold text-white border-white ms-2" style="white-space: nowrap; font-size: 0.8rem;" @click="checkOrderPage()">Track</button>
+    </div>
+
     <!-- Render the imported component -->
     <menu-page v-if="viewMenuPage" :menulist="menus" :stalls="stalls" :selected-stall-id="selectedStallId" :orderlist="orders" @add-item="addOrder" @reduce-item="reduceOrder" @filter-stall="filterStall"></menu-page>
     <order-page v-if="viewOrderPage" :orderlist="orders" :subtotal="subtotal" :user="user" @reset-order="resetOrder" @order-success="orderSuccess"></order-page>
@@ -105,6 +111,8 @@
         user: { name: '', email: '', phone: '', delivery: 'Dine In', comments: '', id: null, role: null },
         orders: {}, 
         subtotal: 0,
+        hasReadyOrders: false,
+        statusPollingId: null,
       }
     },
 
@@ -120,6 +128,20 @@
       // Fetch stalls and menu catalog
       this.fetchStallsData();
       this.fetchMenusData();
+      
+      // Start background status polling if user is logged in
+      if (this.user.id) {
+        this.checkActiveOrdersStatus();
+        this.statusPollingId = setInterval(() => {
+          this.checkActiveOrdersStatus();
+        }, 5000);
+      }
+    },
+
+    unmounted() {
+      if (this.statusPollingId) {
+        clearInterval(this.statusPollingId);
+      }
     },
 
     methods: {
@@ -210,9 +232,23 @@
         
         this.resetViews();
         this.viewMenuPage = true;
+
+        // Start background status polling
+        this.checkActiveOrdersStatus();
+        if (this.statusPollingId) clearInterval(this.statusPollingId);
+        this.statusPollingId = setInterval(() => {
+          this.checkActiveOrdersStatus();
+        }, 5000);
       },
       
       logout() {
+        // Clear background status polling
+        if (this.statusPollingId) {
+          clearInterval(this.statusPollingId);
+          this.statusPollingId = null;
+        }
+        this.hasReadyOrders = false;
+
         // Clear browser session cookies
         document.cookie = "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie = "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
@@ -266,6 +302,19 @@
         this.subtotal = 0;
         this.resetViews();
         this.viewCheckOrderPage = true;
+      },
+
+      async checkActiveOrdersStatus() {
+        if (!this.user.id) return;
+        try {
+          const res = await fetch(`/cpad-project/DNF-3/api/orders?customer_id=${this.user.id}`);
+          const jsonResult = await res.json();
+          if (jsonResult.success) {
+            this.hasReadyOrders = jsonResult.data.some(order => order.status === 'Ready');
+          }
+        } catch (err) {
+          console.error('Failed to check active orders status:', err);
+        }
       }
     },
   });
