@@ -210,7 +210,7 @@ $app->post('/orders/create', function (Request $request, Response $response) {
         $orderIdsCreated = [];
         
         // Prepare database statements
-        $stmtOrder = $pdo->prepare("INSERT INTO orders (customer_id, total_price, status) VALUES (:customer_id, :total_price, 'Received')");
+        $stmtOrder = $pdo->prepare("INSERT INTO orders (customer_id, total_price, status, order_type) VALUES (:customer_id, :total_price, 'Received', :order_type)");
         $stmtItem = $pdo->prepare("INSERT INTO order_items (item_id, order_id, menu_id, quantity, subtotal) VALUES (:item_id, :order_id, :menu_id, :quantity, :subtotal)");
 
         // Generate starting sequential item_id counter
@@ -226,7 +226,8 @@ $app->post('/orders/create', function (Request $request, Response $response) {
 
             $stmtOrder->execute([
                 ':customer_id' => (int)$data['customer_id'],
-                ':total_price' => $stallTotal
+                ':total_price' => $stallTotal,
+                ':order_type'  => !empty($data['order_type']) ? $data['order_type'] : 'Dine In'
             ]);
             $newOrderId = (int)$pdo->lastInsertId();
             $orderIdsCreated[] = $newOrderId;
@@ -301,13 +302,13 @@ $app->get('/api/orders', function (Request $request, Response $response) {
                     // Query only the orders containing menu items from this vendor's stall
                     // We sum the subtotal of the items belonging to this vendor's stall to show the vendor their portion of the order total.
                     $stmt = $pdo->prepare("
-                        SELECT o.order_id, o.customer_id, o.order_date, o.status, SUM(oi.subtotal) as total_price, u.username as customer_name 
+                        SELECT o.order_id, o.customer_id, o.order_date, o.status, o.order_type, SUM(oi.subtotal) as total_price, u.username as customer_name 
                         FROM orders o 
                         JOIN users u ON o.customer_id = u.user_id 
                         JOIN order_items oi ON o.order_id = oi.order_id 
                         JOIN menus m ON oi.menu_id = m.menu_id 
                         WHERE m.stall_id = :stall_id 
-                        GROUP BY o.order_id, o.customer_id, o.order_date, o.status, u.username 
+                        GROUP BY o.order_id, o.customer_id, o.order_date, o.status, o.order_type, u.username 
                         ORDER BY o.order_date DESC
                     ");
                     $stmt->execute([':stall_id' => $stall['stall_id']]);

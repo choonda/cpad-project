@@ -99,6 +99,11 @@
 
                             <div class="col-md-3 mb-2 mb-md-0">
                                 <h5 class="font-weight-bold text-secondary mb-1">Order #{{ order.customer_order_id || order.order_id }}</h5>
+                                <div class="mb-1">
+                                    <span class="badge bg-secondary font-weight-bold text-white" style="font-size: 0.8rem;">
+                                        {{ order.order_type === 'Delivery' ? 'Delivery' : 'Dine In' }}
+                                    </span>
+                                </div>
                                 <small class="text-muted d-block font-weight-bold">Placed on:</small>
                                 <small class="text-muted">{{ order.order_date }}</small>
                             </div>
@@ -126,10 +131,10 @@
                                     Chef is preparing your dishes
                                 </div>
                                 <div v-else-if="order.status === 'Ready'" class="text-success font-weight-bold">
-                                    Ready for Pickup! Please claim at stall.
+                                    {{ order.order_type === 'Delivery' ? 'Out for Delivery!' : 'Ready for Pickup! Please claim at stall.' }}
                                 </div>
                                 <div v-else-if="order.status === 'Collected'" class="text-secondary font-weight-bold">
-                                    Collected! Thank you for dining with us.
+                                    {{ order.order_type === 'Delivery' ? 'Delivered successfully!' : 'Collected! Thank you for dining with us.' }}
                                 </div>
                             </div>
 
