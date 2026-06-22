@@ -7,61 +7,7 @@
     <title>Arked Meranti - My Orders & Tracking</title>
 
     <link rel="stylesheet" href="css/bootstrap.min.css">
-
-    <style>
-        body {
-            background-color: #f4f6f9;
-            font-family: sans-serif;
-        }
-
-        .navbar-brand-custom {
-            color: #800020 !important;
-            /* Deep Burgundy theme styling */
-            font-weight: 700;
-        }
-
-        .order-card {
-            border: none;
-            border-radius: 10px;
-            transition: all 0.2s ease-in-out;
-            cursor: pointer;
-        }
-
-        .order-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 .5rem 1rem rgba(0,0,0,.08) !important;
-        }
-
-        .status-badge {
-            font-size: 0.9rem;
-            padding: 6px 12px;
-            border-radius: 20px;
-        }
-
-        .status-received {
-            background-color: #e3f2fd;
-            color: #0d47a1;
-            border: 1px solid #bbdefb;
-        }
-
-        .status-preparing {
-            background-color: #fff3e0;
-            color: #e65100;
-            border: 1px solid #ffe0b2;
-        }
-
-        .status-ready {
-            background-color: #e8f5e9;
-            color: #1b5e20;
-            border: 1px solid #c8e6c9;
-        }
-
-        .status-collected {
-            background-color: #eceff1;
-            color: #37474f;
-            border: 1px solid #cfd8dc;
-        }
-    </style>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
@@ -101,7 +47,7 @@
                                 <h5 class="font-weight-bold text-secondary mb-1">Order #{{ order.customer_order_id || order.order_id }}</h5>
                                 <div class="mb-1">
                                     <span class="badge bg-secondary font-weight-bold text-white" style="font-size: 0.8rem;">
-                                        {{ order.order_type === 'Delivery' ? 'Delivery' : 'Dine In' }}
+                                        {{ order.order_type === 'Takeaway' ? 'Takeaway' : 'Dine In' }}
                                     </span>
                                 </div>
                                 <small class="text-muted d-block font-weight-bold">Placed on:</small>
@@ -131,10 +77,10 @@
                                     Chef is preparing your dishes
                                 </div>
                                 <div v-else-if="order.status === 'Ready'" class="text-success font-weight-bold">
-                                    {{ order.order_type === 'Delivery' ? 'Out for Delivery!' : 'Ready for Pickup! Please claim at stall.' }}
+                                    {{ order.order_type === 'Takeaway' ? 'Ready for Takeaway! Please claim at stall.' : 'Ready for Pickup! Please claim at stall.' }}
                                 </div>
                                 <div v-else-if="order.status === 'Collected'" class="text-secondary font-weight-bold">
-                                    {{ order.order_type === 'Delivery' ? 'Delivered successfully!' : 'Collected! Thank you for dining with us.' }}
+                                    {{ order.order_type === 'Takeaway' ? 'Taken away successfully!' : 'Collected! Thank you for dining with us.' }}
                                 </div>
                             </div>
 

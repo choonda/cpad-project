@@ -1,0 +1,174 @@
+/* 
+   Arked Meranti Online Ordering System - Custom Styling Sheet
+   Reuses and centralizes styling rules across all frontend dashboards.
+*/
+
+/* --- 1. Shared / Global Styles --- */
+body {
+    background-color: #f4f6f9;
+    font-family: sans-serif;
+}
+
+.navbar-brand-custom {
+    color: #800020 !important; /* Burgundy Theme */
+    font-weight: 700;
+}
+
+/* --- 2. Login Page Specific Styles --- */
+.login-container {
+    max-width: 450px;
+    margin-top: 10%;
+}
+
+.brand-header {
+    color: #800020;
+    font-weight: 700;
+}
+
+/* --- 3. Customer Dashboard Specific Styles --- */
+.stall-badge {
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.stall-badge:hover {
+    transform: translateY(-2px);
+}
+
+.menu-card {
+    border: none;
+    border-radius: 8px;
+    transition: transform 0.2s;
+}
+
+.menu-card:hover {
+    transform: scale(1.02);
+}
+
+.cart-sticky {
+    position: sticky;
+    top: 20px;
+}
+
+.category-header {
+    border-left: 4px solid #800020;
+    padding-left: 10px;
+    color: #495057;
+}
+
+/* --- 4. Customer Orders Tracking Specific Styles --- */
+.order-card {
+    border: none;
+    border-radius: 10px;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+}
+
+.order-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.08) !important;
+}
+
+.status-badge {
+    font-size: 0.9rem;
+    padding: 6px 12px;
+    border-radius: 20px;
+}
+
+.status-received {
+    background-color: #e3f2fd;
+    color: #0d47a1;
+    border: 1px solid #bbdefb;
+}
+
+.status-preparing {
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffe0b2;
+}
+
+.status-ready {
+    background-color: #e8f5e9;
+    color: #1b5e20;
+    border: 1px solid #c8e6c9;
+}
+
+.status-collected {
+    background-color: #eceff1;
+    color: #37474f;
+    border: 1px solid #cfd8dc;
+}
+
+/* --- 5. Vendor Kiosk Back-Office Specific Styles --- */
+.dashboard-tab {
+    cursor: pointer;
+}
+
+.ticket-card {
+    border: none;
+    border-left: 5px solid #800020;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.ticket-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.08) !important;
+}
+
+/* Custom Checkbox Toggle Slider for Menu Availability */
+.switch-toggle {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+}
+
+.switch-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider-toggle {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 24px;
+}
+
+.slider-toggle:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider-toggle {
+    background-color: #1b5e20;
+}
+
+input:checked + .slider-toggle:before {
+    transform: translateX(26px);
+}
+
+.bg-teal {
+    background-color: #20c997 !important;
+}
+
+/* --- 6. Admin Control Panel Specific Styles --- */
+.stat-card {
+    border: none;
+    border-radius: 8px;
+}

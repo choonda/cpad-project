@@ -7,49 +7,7 @@
     <title>Arked Meranti - Customer Ordering Dashboard</title>
 
     <link rel="stylesheet" href="css/bootstrap.min.css">
-
-    <style>
-        body {
-            background-color: #f4f6f9;
-            font-family: sans-serif;
-        }
-
-        .navbar-brand-custom {
-            color: #800020 !important;
-            /* Deep Burgundy theme styling */
-            font-weight: 700;
-        }
-
-        .stall-badge {
-            cursor: pointer;
-            transition: all 0.2s ease-in-out;
-        }
-
-        .stall-badge:hover {
-            transform: translateY(-2px);
-        }
-
-        .menu-card {
-            border: none;
-            border-radius: 8px;
-            transition: transform 0.2s;
-        }
-
-        .menu-card:hover {
-            transform: scale(1.02);
-        }
-
-        .cart-sticky {
-            position: sticky;
-            top: 20px;
-        }
-
-        .category-header {
-            border-left: 4px solid #800020;
-            padding-left: 10px;
-            color: #495057;
-        }
-    </style>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
@@ -186,8 +144,8 @@
                                     <input type="radio" class="btn-check" name="orderType" id="dineInRadio" value="Dine In" v-model="orderType" autocomplete="off">
                                     <label class="btn btn-outline-dark font-weight-bold" for="dineInRadio">Dine In</label>
 
-                                    <input type="radio" class="btn-check" name="orderType" id="deliveryRadio" value="Delivery" v-model="orderType" autocomplete="off">
-                                    <label class="btn btn-outline-dark font-weight-bold" for="deliveryRadio">Delivery</label>
+                                    <input type="radio" class="btn-check" name="orderType" id="takeawayRadio" value="Takeaway" v-model="orderType" autocomplete="off">
+                                    <label class="btn btn-outline-dark font-weight-bold" for="takeawayRadio">Takeaway</label>
                                 </div>
                             </div>
 

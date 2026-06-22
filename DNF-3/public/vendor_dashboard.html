@@ -9,85 +9,7 @@
 
     <!-- Link local core Bootstrap styling sheet provided in the project skeleton -->
     <link rel="stylesheet" href="css/bootstrap.min.css">
-
-    <style>
-        body {
-            background-color: #f8f9fa;
-            font-family: sans-serif;
-        }
-
-        .navbar-brand-custom {
-            color: #800020 !important;
-            /* Deep Burgundy theme styling */
-            font-weight: 700;
-        }
-
-        .dashboard-tab {
-            cursor: pointer;
-        }
-
-        .ticket-card {
-            border: none;
-            border-left: 5px solid #800020;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s ease-in-out;
-        }
-
-        .ticket-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 .5rem 1rem rgba(0,0,0,.08) !important;
-        }
-
-        .switch-toggle {
-            position: relative;
-            display: inline-block;
-            width: 50px;
-            height: 24px;
-        }
-
-        .switch-toggle input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider-toggle {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 24px;
-        }
-
-        .slider-toggle:before {
-            position: absolute;
-            content: "";
-            height: 16px;
-            width: 16px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-
-        input:checked+.slider-toggle {
-            background-color: #1b5e20;
-        }
-
-        input:checked+.slider-toggle:before {
-            transform: translateX(26px);
-        }
-
-        .bg-teal {
-            background-color: #20c997 !important;
-        }
-    </style>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
@@ -152,7 +74,7 @@
                                         <h5 class="font-weight-bold mb-1 text-dark">Order #{{ order.stall_order_id || order.order_id }}</h5>
                                         <div class="mb-1">
                                             <span class="badge bg-secondary font-weight-bold text-white" style="font-size: 0.8rem;">
-                                                {{ order.order_type === 'Delivery' ? 'Delivery' : 'Dine In' }}
+                                                {{ order.order_type === 'Takeaway' ? 'Takeaway' : 'Dine In' }}
                                             </span>
                                         </div>
                                         <div class="font-weight-bold text-secondary mb-1">User: {{ order.customer_name }}</div>
@@ -181,12 +103,12 @@
                                         <button v-else-if="order.status === 'Preparing'"
                                             v-on:click.stop="updateOrderStatusState(order.order_id, 'Ready')"
                                             class="btn btn-success font-weight-bold btn-sm shadow-sm">
-                                            {{ order.order_type === 'Delivery' ? 'Out for Delivery' : 'Serve - Order Ready' }}
+                                            {{ order.order_type === 'Takeaway' ? 'Ready for Takeaway' : 'Serve - Order Ready' }}
                                         </button>
                                         <button v-else-if="order.status === 'Ready'"
                                             v-on:click.stop="updateOrderStatusState(order.order_id, 'Collected')"
                                             class="btn btn-primary font-weight-bold btn-sm shadow-sm">
-                                            {{ order.order_type === 'Delivery' ? 'Mark as Delivered' : 'Mark as Collected' }}
+                                            {{ order.order_type === 'Takeaway' ? 'Mark as Taken Away' : 'Mark as Collected' }}
                                         </button>
                                         <span v-else class="text-muted font-weight-bold text-sm">Dispatched
                                             Completed</span>
@@ -299,7 +221,7 @@
                                         <h5 class="font-weight-bold mb-1 text-dark">Order #{{ order.stall_order_id || order.order_id }}</h5>
                                         <div class="mb-1">
                                             <span class="badge bg-secondary font-weight-bold text-white" style="font-size: 0.8rem;">
-                                                {{ order.order_type === 'Delivery' ? 'Delivery' : 'Dine In' }}
+                                                {{ order.order_type === 'Takeaway' ? 'Takeaway' : 'Dine In' }}
                                             </span>
                                         </div>
                                         <div class="font-weight-bold text-secondary mb-1">User: {{ order.customer_name }}</div>
@@ -319,7 +241,7 @@
                                     </div>
                                     <div class="col-md-3 text-md-right mt-3 mt-md-0">
                                         <span class="text-success font-weight-bold small">
-                                            <i class="bi bi-check-circle-fill"></i> {{ order.order_type === 'Delivery' ? 'Delivered & Completed' : 'Collected & Completed' }}
+                                            <i class="bi bi-check-circle-fill"></i> {{ order.order_type === 'Takeaway' ? 'Taken Away & Completed' : 'Collected & Completed' }}
                                         </span>
                                     </div>
                                 </div>

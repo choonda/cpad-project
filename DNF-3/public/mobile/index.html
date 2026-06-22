@@ -2,48 +2,74 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>T-Bites Mobile</title>
+  <title>Arked Meranti Mobile</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Load W3.CCS and Bootstrap via local host -->
-  <link rel="stylesheet" href="../css/w3.css">
-  <link rel="stylesheet" href="../css/w3pro.css">
-  <link rel="stylesheet" href="../css/w3-theme-teal.css">
+  <!-- Load Bootstrap, Bootstrap Icons, and centralized style.css -->
   <link rel="stylesheet" href="../css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="../css/style.css">
 </head>
-<body style="max-width:480px" id="app">
-  <!-- Side bar navigation -->
-  <nav class="w3-sidebar w3-bar-block w3-card" v-show="viewSideBar">
-    <div class="w3-container w3-theme-d2">
-      <span @click="viewSideBar=false" class="w3-button w3-display-topright w3-large">X</span>
-      <br><br>
+<body id="app" class="bg-light" style="max-width: 480px; margin: 0 auto; min-height: 100vh; box-shadow: 0 0 15px rgba(0,0,0,0.1); background-color: #f4f6f9;">
+  
+  <!-- Sidebar Offcanvas -->
+  <div class="offcanvas offcanvas-start" tabindex="-1" id="mobileSidebar" v-bind:class="{ show: viewSideBar }" style="visibility: visible; display: block; transform: none; transition: transform 0.3s ease-in-out; width: 280px;" v-show="viewSideBar">
+    <div class="offcanvas-header bg-white border-bottom">
+      <h5 class="offcanvas-title font-weight-bold" style="color: #800020;">Arked Meranti</h5>
+      <button type="button" class="btn-close" @click="viewSideBar=false"></button>
     </div>
-    <a class="w3-bar-item w3-button" @click="menuPage()">Menu</a>
-    <a class="w3-bar-item w3-button" @click="orderPage()">Order</a>
-    <a class="w3-bar-item w3-button" @click="checkOrderPage()" v-show="user.id">Check Order</a>
-    <a class="w3-bar-item w3-button" @click="loginPage()" v-show="!user.id">Login</a>
-    <a class="w3-bar-item w3-button" @click="logout()" v-show="user.id">Logout ({{user.email}})</a>
-  </nav>
+    <div class="offcanvas-body p-0">
+      <div class="list-group list-group-flush">
+        <button class="list-group-item list-group-item-action py-3 font-weight-bold border-0" @click="menuPage()">
+          <i class="bi bi-menu-button-wide me-2" style="color: #800020;"></i> Browse Menu
+        </button>
+        <button class="list-group-item list-group-item-action py-3 font-weight-bold border-0" @click="orderPage()">
+          <i class="bi bi-cart me-2" style="color: #800020;"></i> My Cart / Checkout
+        </button>
+        <button v-if="user.id" class="list-group-item list-group-item-action py-3 font-weight-bold border-0" @click="checkOrderPage()">
+          <i class="bi bi-receipt me-2" style="color: #800020;"></i> Order Status
+        </button>
+        <button v-if="!user.id" class="list-group-item list-group-item-action py-3 font-weight-bold border-0" @click="loginPage()">
+          <i class="bi bi-box-arrow-in-right me-2" style="color: #800020;"></i> Sign In
+        </button>
+        <button v-if="user.id" class="list-group-item list-group-item-action py-3 font-weight-bold text-danger border-0" @click="logout()">
+          <i class="bi bi-box-arrow-right me-2"></i> Sign Out ({{ user.name }})
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="offcanvas-backdrop fade show" v-if="viewSideBar" @click="viewSideBar=false" style="z-index: 1040;"></div>
   
   <!-- Header section -->
-  <header class="w3-bar w3-card w3-theme">
-    <button class="w3-bar-item w3-button w3-xxxlarge w3-hover-theme" @click="viewSideBar=true">&#9776;</button>
-    <h1 class="w3-bar-item">Tasty Bites</h1>
-  </header>
+  <nav class="navbar navbar-light bg-white shadow-sm sticky-top" style="z-index: 1030;">
+    <div class="container-fluid px-3">
+      <button class="navbar-toggler border-0 p-0" type="button" @click="viewSideBar=true" style="font-size: 1.5rem; color: #800020; outline: none; box-shadow: none;">
+        <i class="bi bi-list"></i>
+      </button>
+      <span class="navbar-brand navbar-brand-custom mx-auto mb-0 h4" style="color: #800020; font-weight: bold; cursor: pointer;" @click="menuPage()">Arked Meranti</span>
+      <button class="btn btn-link text-decoration-none p-0 position-relative" style="color: #800020; font-size: 1.4rem; outline: none; box-shadow: none;" @click="orderPage()">
+        <i class="bi bi-cart3"></i>
+        <span v-if="cartItemsCount > 0" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger font-weight-bold" style="font-size: 0.45em; padding: 4px 6px;">
+          {{ cartItemsCount }}
+        </span>
+      </button>
+    </div>
+  </nav>
 
   <!-- Main content section -->
-  <div>
+  <div class="container py-3">
     <!-- Render the imported component -->
-    <menu-page v-if="viewMenuPage" :menulist="menus" :orderlist="orders" @add-item="addOrder" @reduce-item="reduceOrder"></menu-page>
-    <order-page  v-if="viewOrderPage" :orderlist="orders" :subtotal="subtotal" :user="user" @reset-order="resetOrder"></order-page>
-    <check-order-page v-if="viewCheckOrderPage"></check-order-page>
+    <menu-page v-if="viewMenuPage" :menulist="menus" :stalls="stalls" :selected-stall-id="selectedStallId" :orderlist="orders" @add-item="addOrder" @reduce-item="reduceOrder" @filter-stall="filterStall"></menu-page>
+    <order-page v-if="viewOrderPage" :orderlist="orders" :subtotal="subtotal" :user="user" @reset-order="resetOrder" @order-success="orderSuccess"></order-page>
+    <check-order-page v-if="viewCheckOrderPage" :user="user"></check-order-page>
     <login-page v-if="viewLoginPage" @auth-user="authUser"></login-page>
   </div>
   
   <!-- Footer section -->
-  <footer class="w3-container w3-theme w3-margin-top w3-center">
-    Contact: tastybites@email.com
-    <br>
-    &copy; 2026 Tasty Bites
+  <footer class="bg-white border-top py-4 mt-5 text-center text-muted small" style="margin-bottom: 0;">
+    <div class="container">
+      <p class="mb-1 font-weight-bold" style="color: #800020;">Arked Meranti Mobile Ordering</p>
+      <p class="mb-0">&copy; 2026 Universiti Teknologi Malaysia</p>
+    </div>
   </footer>
 </body>
 </html>
@@ -51,55 +77,121 @@
 <script src="../js/bootstrap.bundle.min.js"></script>
 
 <!-- Load Vue 3 via CDN -->
-<script  src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 
 <!-- Note the type="module" attribute -->
 <script type="module">
-  // Import your local JS component file
-  import MenuPage from './menu-page.js';
-  import OrderPage from './order-page.js';
-  import CheckOrderPage from './check-order-page.js';
-  import LoginPage from './login-page.js';
+  // Import local JS component files with cache-busting version query parameter
+  import MenuPage from './menu-page.js?v=1.0.1';
+  import OrderPage from './order-page.js?v=1.0.1';
+  import CheckOrderPage from './check-order-page.js?v=1.0.1';
+  import LoginPage from './login-page.js?v=1.0.1';
   
   const vueApp = Vue.createApp({
     components: {
-      // Register the imported object locally
       MenuPage, CheckOrderPage, OrderPage, LoginPage
     },
     
     data() { 
-      return { viewSideBar: false, 
-               viewMenuPage: true, viewOrderPage: false, viewCheckOrderPage: false, viewLoginPage: false,
-               menus: [ 
-                  { id: 1, name:'Fresh Orange', price:5.00, type:'Drink'},
-                  { id: 2, name:'Hot Arabica Coffee', price:4.00, type:'Drink'},
-                  { id: 3, name:'Beef Burger', price:8.50, type:'Food'}, 
-                  { id: 4, name:'Chicken Pizza', price:15.00, type:'Food'}, 
-              ],
-              user: { name:'', email:'', phone:'', delivery:'', comments:'', id:null, role:null },
-              orders: { }, subtotal: 0,
+      return { 
+        viewSideBar: false, 
+        viewMenuPage: true, 
+        viewOrderPage: false, 
+        viewCheckOrderPage: false, 
+        viewLoginPage: false,
+        menus: [],
+        stalls: [],
+        selectedStallId: null,
+        user: { name: '', email: '', phone: '', delivery: 'Dine In', comments: '', id: null, role: null },
+        orders: {}, 
+        subtotal: 0,
       }
     },
+
+    computed: {
+      cartItemsCount() {
+        return Object.values(this.orders).reduce((total, item) => total + item.qty, 0);
+      }
+    },
+
+    mounted() {
+      // Check for active login session cookies
+      this.readSessionCookies();
+      // Fetch stalls and menu catalog
+      this.fetchStallsData();
+      this.fetchMenusData();
+    },
+
     methods: {
+      readSessionCookies() {
+        const username = this.getCookie('username');
+        const role = this.getCookie('role');
+        const userId = this.getCookie('user_id');
+        if (userId) {
+          this.user.name = username || '';
+          this.user.email = username || ''; // Treat username as email/display name
+          this.user.id = parseInt(userId);
+          this.user.role = role || '';
+        }
+      },
+
+      getCookie(name) {
+        const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? decodeURIComponent(match[2]) : null;
+      },
+
+      async fetchStallsData() {
+        try {
+          const res = await fetch('/cpad-project/DNF-3/api/stalls');
+          const jsonResult = await res.json();
+          if (jsonResult.success) {
+            this.stalls = jsonResult.data;
+          }
+        } catch (err) {
+          console.error('Failed to load vendor stall listings:', err);
+        }
+      },
+
+      async fetchMenusData() {
+        try {
+          let url = '/cpad-project/DNF-3/api/menus';
+          if (this.selectedStallId !== null) {
+            url += `?stall_id=${this.selectedStallId}`;
+          }
+          const res = await fetch(url);
+          const jsonResult = await res.json();
+          if (jsonResult.success) {
+            this.menus = jsonResult.data;
+          }
+        } catch (err) {
+          console.error('Failed to load menu items catalog:', err);
+        }
+      },
+
+      filterStall(stallId) {
+        this.selectedStallId = stallId;
+        this.fetchMenusData();
+      },
+      
       menuPage() {
         this.resetViews();
         this.viewMenuPage = true;
-      }, // end of menuPage
+      },
       
       orderPage() {
         this.resetViews();
         this.viewOrderPage = true;
-      }, // end of orderPage
+      },
       
       checkOrderPage() {
         this.resetViews();
         this.viewCheckOrderPage = true;
-      }, // end of orderPage
+      },
       
       loginPage() {
         this.resetViews();
         this.viewLoginPage = true;
-      }, // end of loinPage
+      },
       
       resetViews() {
         this.viewSideBar = false;
@@ -107,63 +199,74 @@
         this.viewOrderPage = false;
         this.viewCheckOrderPage = false;
         this.viewLoginPage = false;
-      }, // end of resetView
+      },
       
       authUser(user) {
-        this.user.name = user.name;
-        this.user.email = user.email;
-        this.user.phone = user.phone;
-        this.user.id = user.id;
+        this.user.name = user.username;
+        this.user.email = user.email || '';
+        this.user.phone = user.phone || '';
+        this.user.id = user.user_id;
         this.user.role = user.role;
         
         this.resetViews();
         this.viewMenuPage = true;
-      }, // end of authUser
+      },
       
       logout() {
+        // Clear browser session cookies
+        document.cookie = "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie = "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie = "user_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        
         this.orders = {};
         this.subtotal = 0;
-        this.user = { name:'', email:'', phone:'', delivery:'', comments:'', id:null, role:null };
+        this.user = { name: '', email: '', phone: '', delivery: 'Dine-in', comments: '', id: null, role: null };
         
         this.resetViews();
         this.viewLoginPage = true;
-      }, // end of logout
+      },
       
       addOrder(item) {
-        if (!this.orders[item.id]) {
-          //alert("create and add order");
-          this.orders[item.id] = {name:item.name, price:item.price, qty:1};
-          this.subtotal += this.orders[item.id]['price'];
-          
+        const id = item.menu_id;
+        const price = parseFloat(item.price);
+        if (!this.orders[id]) {
+          this.orders[id] = { name: item.item_name, price: price, qty: 1 };
+          this.subtotal += price;
         } else {
-          //alert("add order");
-          this.orders[item.id]['qty']++;
-          this.subtotal += this.orders[item.id]['price'];
+          this.orders[id].qty++;
+          this.subtotal += price;
         }
-      }, // end of addOrder
+      },
       
       reduceOrder(item) {
-        var id = item.id;
+        const id = item.menu_id;
+        const price = parseFloat(item.price);
         
-        if (this.orders[id]) { // check if order exist
-          if (this.orders[id]['qty'] > 0) {
-            this.orders[id]['qty']--;
-            this.subtotal -= this.orders[id]['price'];
+        if (this.orders[id]) {
+          if (this.orders[id].qty > 0) {
+            this.orders[id].qty--;
+            this.subtotal -= price;
           }
           
-          if (this.orders[id]['qty'] == 0) {
+          if (this.orders[id].qty === 0) {
             delete this.orders[id];
           }
         }
-      }, // end of reduceOrder
+      },
       
       resetOrder() {
         this.orders = {};
         this.subtotal = 0;
-        
         this.resetViews();
         this.viewMenuPage = true;
-      }, // end of resetOrder
+      },
+
+      orderSuccess() {
+        this.orders = {};
+        this.subtotal = 0;
+        this.resetViews();
+        this.viewCheckOrderPage = true;
+      }
     },
   });
 
